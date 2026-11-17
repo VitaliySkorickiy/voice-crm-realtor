@@ -1,9 +1,10 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 
 import { ThemeProvider, useTheme } from './lib/theme';
@@ -15,6 +16,7 @@ import PropertiesScreen from './screens/PropertiesScreen';
 import PropertyDetailScreen from './screens/PropertyDetailScreen';
 import VoiceRecordScreen from './screens/VoiceRecordScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import LicenseGate from './components/LicenseGate';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -31,6 +33,11 @@ const Stack = createNativeStackNavigator();
 
 function MainTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Отступ под жестовую полоску / кнопки навигации Android/iOS
+  const bottomPad = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
+  const tabBarHeight = 56 + bottomPad;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }: any) => ({
@@ -41,7 +48,22 @@ function MainTabs() {
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textTertiary,
         headerShown: false,
-        tabBarStyle: { paddingBottom: 8, height: 65, backgroundColor: colors.tabBar, borderTopColor: colors.border, borderTopWidth: 1 }
+        tabBarStyle: {
+          paddingTop: 6,
+          paddingBottom: bottomPad,
+          height: tabBarHeight,
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          marginBottom: Platform.OS === 'ios' ? 0 : 4,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 2,
+        },
       })}
     >
       <Tab.Screen name="Главная" component={DashboardScreen} />
@@ -76,7 +98,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppContent />
+        <LicenseGate>
+          <AppContent />
+        </LicenseGate>
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -1,13 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DB_KEY = 'voicecrm_db_v1';
-const INIT_KEY = 'voicecrm_initialized_v1';
-
 export type DbPayload = {
   clients: any[];
   properties: any[];
   tasks: any[];
 };
+
+const DB_KEY = 'voicecrm_db_v1';
+const INIT_KEY = 'voicecrm_initialized_v1';
 
 export async function loadDB(): Promise<DbPayload | null> {
   try {
@@ -20,7 +20,7 @@ export async function loadDB(): Promise<DbPayload | null> {
       tasks: Array.isArray(data.tasks) ? data.tasks : [],
     };
   } catch (e) {
-    console.log('DB load error:', e);
+    console.log('Web DB load error:', e);
     return null;
   }
 }
@@ -30,14 +30,13 @@ export async function saveDB(data: DbPayload): Promise<void> {
     await AsyncStorage.setItem(DB_KEY, JSON.stringify(data));
     await AsyncStorage.setItem(INIT_KEY, '1');
   } catch (e) {
-    console.log('DB save error:', e);
+    console.log('Web DB save error:', e);
   }
 }
 
 export async function isInitialized(): Promise<boolean> {
   try {
-    const v = await AsyncStorage.getItem(INIT_KEY);
-    return v === '1';
+    return (await AsyncStorage.getItem(INIT_KEY)) === '1';
   } catch {
     return false;
   }
@@ -47,6 +46,6 @@ export async function clearDB(): Promise<void> {
   try {
     await AsyncStorage.multiRemove([DB_KEY, INIT_KEY]);
   } catch (e) {
-    console.log('DB clear error:', e);
+    console.log('Web DB clear error:', e);
   }
 }

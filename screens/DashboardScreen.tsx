@@ -79,8 +79,8 @@ export default function DashboardScreen({ navigation }: any) {
     // округлить минуты
     defaultReminder.setSeconds(0, 0);
     setReminderDate(defaultReminder);
-    setShowDatePicker(true);
-    setShowTimePicker(true);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
     setShowReminderModal(true);
   };
 
@@ -105,10 +105,22 @@ export default function DashboardScreen({ navigation }: any) {
       Alert.alert('Ошибка', 'Время напоминания должно быть в будущем');
       return;
     }
+
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Только на телефоне',
+        'Браузер не умеет локальные будильники. Откройте проект в Expo Go на телефоне.'
+      );
+      return;
+    }
+
     try {
       const ok = await ensureNotificationPermissions();
       if (!ok) {
-        Alert.alert('Нет доступа', 'Разрешите уведомления в настройках телефона, чтобы будильник сработал');
+        Alert.alert(
+          'Нет доступа к уведомлениям',
+          'Настройки телефона → Приложения → Expo Go → Уведомления → разрешите.'
+        );
         return;
       }
 
@@ -119,51 +131,49 @@ export default function DashboardScreen({ navigation }: any) {
           sound: 'default',
           vibrationPattern: [0, 400, 200, 400],
           enableVibrate: true,
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           bypassDnd: true,
         });
       }
 
-      const seconds = Math.max(1, Math.floor((reminderDate.getTime() - Date.now()) / 1000));
+      const seconds = Math.max(5, Math.floor((reminderDate.getTime() - Date.now()) / 1000));
 
-      const content: Notifications.NotificationContentInput = {
-        title: '⏰ ' + reminderTask.title,
-        body: 'Напоминание о задаче — пора действовать',
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-      };
-
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content,
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds,
-            repeats: false,
-            ...(Platform.OS === 'android' ? { channelId: 'alarms' } : {}),
-          } as any,
-        });
-      } catch {
-        // fallback для старых версий API
-        await Notifications.scheduleNotificationAsync({
-          content: { ...content, sound: 'default' },
-          trigger: { seconds, channelId: Platform.OS === 'android' ? 'alarms' : undefined } as any,
-        });
-      }
+      // Простой trigger — лучше работает в Expo Go
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '⏰ ' + reminderTask.title,
+          body: 'Напоминание о задаче — пора действовать',
+          sound: true,
+          ...(Platform.OS === 'android' ? { channelId: 'alarms' } : {}),
+        },
+        trigger: {
+          seconds,
+          channelId: Platform.OS === 'android' ? 'alarms' : undefined,
+        } as any,
+      });
 
       Alert.alert(
         'Будильник установлен',
-        `«${reminderTask.title}»\n${reminderDate.toLocaleString('ru-RU', {
-          weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-        })}`
+        '«' + reminderTask.title + '»\n' +
+          reminderDate.toLocaleString('ru-RU', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'long',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
       );
       setShowReminderModal(false);
       setReminderTask(null);
       setShowDatePicker(false);
       setShowTimePicker(false);
-    } catch (e) {
-      console.log(e);
-      Alert.alert('Ошибка', 'Не удалось установить напоминание. На web уведомления ограничены — проверьте на телефоне.');
+    } catch (e: any) {
+      console.log('reminder error', e);
+      const msg = e?.message || String(e);
+      Alert.alert(
+        'Не удалось поставить напоминание',
+        msg + '\n\nПлатформа: ' + Platform.OS +
+          '\nПроверьте, что открыто Expo Go (не браузер) и разрешены уведомления.'
+      );
     }
   };
 
@@ -315,44 +325,77 @@ export default function DashboardScreen({ navigation }: any) {
                   </Text>
                 </View>
 
-                <Text style={[styles.reminderLabel, { color: colors.textSecondary }]}>1. Дата на календаре</Text>
-                <View style={{ alignItems: 'center', marginBottom: 8, backgroundColor: colors.surfaceMuted, borderRadius: 16, paddingVertical: 8 }}>
-                  <DateTimePicker
-                    value={reminderDate}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                    minimumDate={new Date()}
-                    locale="ru-RU"
-                    themeVariant={colors.background === '#000000' || colors.background === '#000' ? 'dark' : 'light'}
-                    onChange={(_, selected) => {
-                      if (selected) {
-                        const next = new Date(reminderDate);
-                        next.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
-                        setReminderDate(next);
-                      }
-                    }}
-                  />
-                </View>
+                <Text style={[styles.reminderLabel, { color: colors.textSecondary }]}>Дата</Text>
+                <TouchableOpacity
+                  style={[styles.reminderPickerBtn, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
+                  onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.reminderPickerText, { color: colors.textPrimary }]}>
+                    {reminderDate.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Text>
+                </TouchableOpacity>
 
-                <Text style={[styles.reminderLabel, { color: colors.textSecondary }]}>2. Время как на будильнике</Text>
-                <View style={{ alignItems: 'center', marginBottom: 8, backgroundColor: colors.surfaceMuted, borderRadius: 16, paddingVertical: 4 }}>
-                  <DateTimePicker
-                    value={reminderDate}
-                    mode="time"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
-                    is24Hour
-                    locale="ru-RU"
-                    minuteInterval={1}
-                    themeVariant={colors.background === '#000000' || colors.background === '#000' ? 'dark' : 'light'}
-                    onChange={(_, selected) => {
-                      if (selected) {
-                        const next = new Date(reminderDate);
-                        next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-                        setReminderDate(next);
-                      }
-                    }}
-                  />
-                </View>
+                {showDatePicker && (
+                  <View style={{ backgroundColor: colors.surfaceMuted, borderRadius: 16, marginBottom: 12, overflow: 'hidden' }}>
+                    <DateTimePicker
+                      value={reminderDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      minimumDate={new Date()}
+                      locale="ru-RU"
+                      onChange={(_, selected) => {
+                        if (Platform.OS === 'android') setShowDatePicker(false);
+                        if (selected) {
+                          const next = new Date(reminderDate);
+                          next.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
+                          setReminderDate(next);
+                        }
+                      }}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={{ padding: 12, alignItems: 'flex-end' }} onPress={() => setShowDatePicker(false)}>
+                        <Text style={{ color: colors.accent, fontWeight: '600' }}>Готово</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                <Text style={[styles.reminderLabel, { color: colors.textSecondary }]}>Время</Text>
+                <TouchableOpacity
+                  style={[styles.reminderPickerBtn, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
+                  onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}
+                >
+                  <Ionicons name="alarm-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.reminderPickerText, { color: colors.textPrimary }]}>
+                    {reminderDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </TouchableOpacity>
+
+                {showTimePicker && (
+                  <View style={{ backgroundColor: colors.surfaceMuted, borderRadius: 16, marginBottom: 12, overflow: 'hidden', alignItems: 'center' }}>
+                    <DateTimePicker
+                      value={reminderDate}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      is24Hour
+                      locale="ru-RU"
+                      onChange={(_, selected) => {
+                        if (Platform.OS === 'android') setShowTimePicker(false);
+                        if (selected) {
+                          const next = new Date(reminderDate);
+                          next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                          setReminderDate(next);
+                        }
+                      }}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={{ padding: 12, alignSelf: 'stretch', alignItems: 'flex-end' }} onPress={() => setShowTimePicker(false)}>
+                        <Text style={{ color: colors.accent, fontWeight: '600' }}>Готово</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
 
                 <View style={[styles.reminderInfo, { backgroundColor: colors.accentSoft, marginTop: 4 }]}>
                   <Text style={[styles.reminderTaskTitle, { color: colors.accent, textAlign: 'center' }]}>
@@ -381,7 +424,7 @@ export default function DashboardScreen({ navigation }: any) {
                 <View style={[styles.modalBtns, { marginTop: 16, marginBottom: 24 }]}>
                   <TouchableOpacity
                     style={[styles.modalBtn, { backgroundColor: colors.surfaceMuted }]}
-                    onPress={() => { setShowReminderModal(false); setReminderTask(null); }}
+                    onPress={() => { setShowReminderModal(false); setReminderTask(null); setShowDatePicker(false); setShowTimePicker(false); }}
                   >
                     <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>Отмена</Text>
                   </TouchableOpacity>

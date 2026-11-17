@@ -17,6 +17,7 @@ type StoreValue = {
   updateTask: (id: string, updated: any) => void;
   deleteTask: (id: string) => void;
   addTask: (task: any) => void;
+  replaceAll: (data: { clients: any[]; properties: any[]; tasks: any[] }) => void;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -91,6 +92,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
   const deleteTask = useCallback((id: string) => setTasks((p) => p.filter((t) => t.id !== id)), []);
   const addTask = useCallback((task: any) => setTasks((p) => [...p, task]), []);
+  const replaceAll = useCallback((data: { clients: any[]; properties: any[]; tasks: any[] }) => {
+    setClients(Array.isArray(data.clients) ? data.clients : []);
+    setProperties(Array.isArray(data.properties) ? data.properties : []);
+    setTasks(Array.isArray(data.tasks) ? data.tasks : []);
+  }, []);
 
   if (!ready) {
     return (
@@ -116,6 +122,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updateTask,
         deleteTask,
         addTask,
+        replaceAll,
       }}
     >
       {children}
