@@ -48,10 +48,7 @@ export function validateLicenseKeyFormat(raw: string): { ok: boolean; normalized
 }
 
 /** Тестовый ключ для разработки (проходит checksum) — подобрать или сгенерировать */
-export function generateDevKey(): string {
-  // Проверенный тестовый ключ (checksum ok). Для продакшена — выдача после оплаты.
-  return 'VCRM-DEMO-2026-TRIL-AAA6';
-}
+// Тестовый ключ убран из UX. Генерация только на стороне продавца после оплаты.
 
 function maskKey(key: string): string {
   if (key.length < 10) return '••••';

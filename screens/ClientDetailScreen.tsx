@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
 import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
+import { matchProperties } from '../lib/matching';
 import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton, makeCall } from '../components/ui';
 import { styles } from '../styles';
 
@@ -38,6 +39,7 @@ export default function ClientDetailScreen({ route, navigation }: any) {
   };
 
   const shownProps = Array.isArray(form.shownProperties) ? form.shownProperties : [];
+  const matches = matchProperties(form, properties);
   const filteredPropsForPicker = properties.filter((p: any) => {
     const q = (propSearch || '').toLowerCase();
     return String(p.title || '').toLowerCase().includes(q) ||
@@ -219,7 +221,27 @@ export default function ClientDetailScreen({ route, navigation }: any) {
               </View>
             </SafeAreaView>
           </Modal>
-        </ScrollView>
+        
+            <View style={[styles.infoCard, { backgroundColor: colors.card, marginTop: 12, marginBottom: 12 }]}>
+              <Text style={[styles.settingTitle, { color: colors.textPrimary, marginBottom: 8 }]}>Подходящие объекты</Text>
+              {matches.length === 0 ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Нет совпадений по бюджету / комнатам / району</Text>
+              ) : (
+                matches.slice(0, 5).map((m: any) => (
+                  <TouchableOpacity
+                    key={m.property.id}
+                    style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.separator }}
+                    onPress={() => navigation.navigate('PropertyDetail', { property: m.property, isNew: false })}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{m.property.title || m.property.street || 'Объект'}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {m.property.rooms} · {m.property.price ? formatPrice(m.property.price) : ''} · {m.reasons.join(', ')}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+</ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

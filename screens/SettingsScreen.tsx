@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
 import { clearDB } from '../lib/storage';
+import * as FileSystem from 'expo-file-system';
 import { exportBackup, importBackupFromPicker } from '../lib/backup';
 import { getLicenseStatus, activateLicense, startPurchaseStub, debugResetTrial, TRIAL_DAYS, type LicenseStatus } from '../lib/license';
 import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
@@ -81,11 +82,8 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: colors.accentSoft, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
                   onPress={async () => {
-                    const { message, testKey } = await startPurchaseStub();
-                    Alert.alert('Оплата (заглушка)', message, [
-                      { text: 'Вставить тест-ключ', onPress: () => setKeyInput(testKey) },
-                      { text: 'OK' },
-                    ]);
+                    const { message } = await startPurchaseStub();
+                    Alert.alert('Оплата', message);
                   }}
                 >
                   <Text style={{ color: colors.accent, fontWeight: '600' }}>Купить</Text>
@@ -116,9 +114,19 @@ export default function SettingsScreen() {
                     text: 'Сбросить',
                     style: 'destructive',
                     onPress: async () => {
-                      await clearDB();
-                      replaceAll({ clients: [], properties: [], tasks: [] });
-                      Alert.alert('Готово', 'Данные очищены. При следующем запуске появятся демо-данные.');
+                      try {
+                        await clearDB();
+                        // удалить сохранённые фото
+                        const photosDir = FileSystem.documentDirectory + 'photos/';
+                        try {
+                          const info = await FileSystem.getInfoAsync(photosDir);
+                          if (info.exists) await FileSystem.deleteAsync(photosDir, { idempotent: true });
+                        } catch {}
+                        replaceAll({ clients: [], properties: [], tasks: [] });
+                        Alert.alert('Готово', 'Данные и фото очищены. При следующем запуске появятся демо-данные.');
+                      } catch (e: any) {
+                        Alert.alert('Ошибка', e?.message || 'Не удалось сбросить данные');
+                      }
                     },
                   },
                 ]

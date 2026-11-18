@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Голосовая CRM риелтора",
-    "slug": "voice-crm-realtor",
+    "slug": "voice-crm-rieltor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -37,11 +37,21 @@
     },
     "plugins": [
       "expo-notifications",
-      "@react-native-community/datetimepicker",
-      "expo-sqlite",
-      "expo-status-bar",
-      "expo-sharing"
+      [
+        "react-native-vosk",
+        {
+          "models": [
+            "assets/model-ru-ru"
+          ],
+          "iOSMicrophonePermission": "Приложению нужен доступ к микрофону для голосовых заметок риелтора"
+        }
+      ]
     ],
-    "owner": "vitaliyskorickiy"
+    "owner": "zarias87",
+    "extra": {
+      "eas": {
+        "projectId": "0b250f0c-cbb6-4e26-93a1-7ff4ffdf92fe"
+      }
+    }
   }
 }

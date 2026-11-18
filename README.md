@@ -1,28 +1,58 @@
 # Голосовая CRM риелтора
 
-Рабочая версия под **Expo SDK 57** / Expo Go 57.
-
-## Установка
-
-```bash
-npm install --legacy-peer-deps
-npx expo install --fix -- --legacy-peer-deps
-npx expo start --clear
-```
+Офлайн-приложение для частных риелторов. Все данные хранятся только на устройстве. Никакой аналитики, облачного распознавания речи и передачи персональных данных.
 
 ## Возможности
 
 - Клиенты, объекты, задачи, воронка
-- AsyncStorage (данные на устройстве)
-- Фото из галереи
-- Напоминания с календарём и временем (как будильник)
+- Голосовой ввод → карточка (Vosk офлайн)
+- Фото объектов (копируются в папку приложения)
+- Напоминания с календарём и звуком
+- Резервная копия (файл на устройстве / через «Поделиться»)
+- Локальная лицензия (триал 7 дней, ключ активации)
+- Тёмная тема
+
+## Установка и сборка
+
+```bash
+npm install --legacy-peer-deps
+npx expo install --fix -- --legacy-peer-deps
+```
+
+### Офлайн-распознавание (Vosk)
+
+1. Скачайте русскую модель:  
+   https://alphacephei.com/vosk/models  
+   Рекомендуется `vosk-model-small-ru-0.22` (~45 МБ).
+
+2. Распакуйте содержимое архива в папку проекта:  
+   `assets/model-ru-ru/`  
+   (внутри должны быть файлы модели: `am/`, `graph/`, `conf/` и т.д.)
+
+3. Соберите development или production build (Expo Go не поддерживает нативные модули Vosk):
+
+```bash
+npx expo prebuild
+npx expo run:android
+# или
+npx expo run:ios
+```
+
+После первой сборки модель будет внутри приложения. Распознавание работает без интернета.
 
 ## Структура
 
 ```
 App.tsx
-styles.ts
-lib/
-components/
-screens/
+lib/           storage, store, theme, parser, vosk, matching, license, backup
+components/    ui, LicenseGate
+screens/       Dashboard, Clients, Properties, Voice, Settings
+assets/        icon, splash, model-ru-ru (модель Vosk)
 ```
+
+## Приватность
+
+- База данных: локальный SQLite (на телефоне) / AsyncStorage (web)
+- Голос: обработка только на устройстве (Vosk)
+- Бэкап: файл, который пользователь сохраняет сам
+- Нет серверов, нет SDK аналитики, нет передачи данных

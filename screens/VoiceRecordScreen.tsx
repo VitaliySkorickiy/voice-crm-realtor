@@ -1,26 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, SafeAreaView, TextInput, Alert, Platform,
+  View, Text, TouchableOpacity, SafeAreaView, TextInput, Alert, Platform, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
 import { formatPrice } from '../lib/utils';
 import { parseVoiceText } from '../lib/parser';
+import { startListening, stopListening, ensureModelLoaded, isVoskReady, getVoskError } from '../lib/vosk';
 import { styles } from '../styles';
 
 export default function VoiceRecordScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { addClient, addProperty } = useStore();
   const [isRecording, setIsRecording] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [transcribedText, setTranscribedText] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [parsedEntity, setParsedEntity] = useState<any>(null);
-  const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const timerRef = useRef<any>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const finalParts = useRef<string[]>([]);
 
   useEffect(() => {
     if (isRecording) timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -30,7 +31,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
 
   useEffect(() => {
     return () => {
-      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      stopListening().catch(() => {});
     };
   }, []);
 
@@ -40,47 +41,66 @@ export default function VoiceRecordScreen({ navigation }: any) {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const startRecording = async () => {
+  const loadModel = async () => {
+    if (modelReady || modelLoading) return;
+    setModelLoading(true);
     try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Нет доступа', 'Разрешите микрофон в настройках телефона');
-        return;
-      }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      await ensureModelLoaded();
+      setModelReady(true);
+    } catch (e: any) {
+      Alert.alert(
+        'Vosk недоступен',
+        (e?.message || 'Ошибка загрузки модели') +
+          '\n\nНужен development build (не Expo Go) и модель в assets/model-ru-ru.\nСкачайте vosk-model-small-ru-0.22 и положите содержимое в assets/model-ru-ru.'
       );
-      recordingRef.current = recording;
+    } finally {
+      setModelLoading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Только на телефоне', 'Офлайн-распознавание работает в собранном приложении на устройстве.');
+      return;
+    }
+    if (!modelReady) {
+      await loadModel();
+      if (!isVoskReady()) return;
+    }
+    try {
+      finalParts.current = [];
+      setTranscribedText('');
       setSeconds(0);
       setIsRecording(true);
       setShowResult(false);
       setParsedEntity(null);
+
+      await startListening(
+        (partial) => {
+          // partial is live; show it
+          const base = finalParts.current.join(' ').trim();
+          setTranscribedText((base ? base + ' ' : '') + partial);
+        },
+        (finalText) => {
+          if (finalText && finalText.trim()) {
+            finalParts.current.push(finalText.trim());
+            setTranscribedText(finalParts.current.join(' '));
+          }
+        }
+      );
     } catch (e: any) {
-      console.log(e);
-      Alert.alert('Запись', e?.message || 'Не удалось начать запись. Можно ввести текст вручную.');
-      setIsRecording(true);
-      setSeconds(0);
+      setIsRecording(false);
+      Alert.alert('Не удалось начать', e?.message || 'Ошибка Vosk. Можно ввести текст вручную.');
     }
   };
 
   const stopRecording = async () => {
     setIsRecording(false);
     try {
-      const rec = recordingRef.current;
-      if (rec) {
-        await rec.stopAndUnloadAsync();
-        const uri = rec.getURI();
-        setRecordingUri(uri || null);
-        recordingRef.current = null;
-      }
+      await stopListening();
     } catch (e) {
-      console.log('stop rec', e);
+      console.log('stop', e);
     }
-    // Vosk позже подключится к recordingUri. Сейчас — разбор текста из поля.
   };
 
   const toggleRecording = async () => {
@@ -91,19 +111,16 @@ export default function VoiceRecordScreen({ navigation }: any) {
   const runParse = () => {
     const text = transcribedText.trim();
     if (!text) {
-      Alert.alert(
-        'Нет текста',
-        'Введите или вставьте текст заметки. Пример: «Клиент Иванов, телефон 9991234567, бюджет 7 млн» или «Двушка ул Ленина, 54 м2, 5 этаж, 6.5 млн».'
-      );
+      Alert.alert('Нет текста', 'Надиктуйте или введите текст. Пример: «Клиент Иванов, телефон 9991234567, бюджет 7 млн»');
       return;
     }
     const result = parseVoiceText(text);
     if (result.type === 'client' && !result.data.phone) {
-      Alert.alert('Не хватает данных', 'Для клиента нужен телефон. Добавьте номер в текст.');
+      Alert.alert('Не хватает данных', 'Для клиента нужен телефон. Добавьте номер.');
       return;
     }
     if (result.type === 'property' && !result.data.price) {
-      Alert.alert('Не хватает данных', 'Для объекта нужна цена. Добавьте сумму в текст.');
+      Alert.alert('Не хватает данных', 'Для объекта нужна цена. Добавьте сумму.');
       return;
     }
     setParsedEntity(result);
@@ -112,15 +129,19 @@ export default function VoiceRecordScreen({ navigation }: any) {
 
   const handleSaveEntity = () => {
     if (!parsedEntity) return;
-    if (parsedEntity.type === 'client') addClient(parsedEntity.data);
-    else addProperty(parsedEntity.data);
-    Alert.alert('Сохранено', parsedEntity.type === 'client' ? 'Клиент создан' : 'Объект создан');
-    setShowResult(false);
-    setTranscribedText('');
-    setParsedEntity(null);
-    setSeconds(0);
-    setRecordingUri(null);
-    navigation.goBack?.();
+    try {
+      if (parsedEntity.type === 'client') addClient(parsedEntity.data);
+      else addProperty(parsedEntity.data);
+      Alert.alert('Сохранено', parsedEntity.type === 'client' ? 'Клиент создан' : 'Объект создан');
+      setShowResult(false);
+      setTranscribedText('');
+      setParsedEntity(null);
+      finalParts.current = [];
+      setSeconds(0);
+      navigation.goBack?.();
+    } catch (e: any) {
+      Alert.alert('Ошибка сохранения', e?.message || 'Не удалось сохранить карточку');
+    }
   };
 
   return (
@@ -135,13 +156,21 @@ export default function VoiceRecordScreen({ navigation }: any) {
       <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
         {!showResult ? (
           <>
-            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <Text style={[styles.recordTime, { color: colors.textPrimary }]}>{formatTimer(seconds)}</Text>
-              <Text style={[styles.recordHint, { color: colors.textSecondary }]}>
-                {isRecording ? 'Идёт запись… нажмите ещё раз чтобы остановить' : 'Нажмите микрофон, затем введите текст заметки'}
+              <Text style={[styles.recordHint, { color: colors.textSecondary, textAlign: 'center' }]}>
+                {modelLoading
+                  ? 'Загрузка модели…'
+                  : isRecording
+                    ? 'Говорите. Нажмите ещё раз чтобы остановить'
+                    : modelReady
+                      ? 'Модель готова. Нажмите микрофон'
+                      : 'Нажмите микрофон — загрузится офлайн-модель Vosk'}
               </Text>
-              {recordingUri ? (
-                <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6 }}>Аудио сохранено (для Vosk)</Text>
+              {getVoskError() ? (
+                <Text style={{ color: colors.error, fontSize: 12, marginTop: 6, textAlign: 'center' }}>
+                  {getVoskError()}
+                </Text>
               ) : null}
             </View>
 
@@ -151,17 +180,22 @@ export default function VoiceRecordScreen({ navigation }: any) {
                 {
                   backgroundColor: isRecording ? colors.error : colors.accent,
                   alignSelf: 'center',
-                  marginBottom: 28,
-                  shadowColor: isRecording ? colors.error : colors.accent,
+                  marginBottom: 20,
+                  opacity: modelLoading ? 0.6 : 1,
                 },
               ]}
               onPress={toggleRecording}
+              disabled={modelLoading}
             >
-              <Ionicons name={isRecording ? 'stop' : 'mic'} size={48} color="white" />
+              {modelLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Ionicons name={isRecording ? 'stop' : 'mic'} size={48} color="white" />
+              )}
             </TouchableOpacity>
 
             <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 8 }]}>
-              Текст для разбора (клиент или объект)
+              Распознанный текст (можно править)
             </Text>
             <TextInput
               style={[
@@ -176,7 +210,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
               ]}
               value={transcribedText}
               onChangeText={setTranscribedText}
-              placeholder="Клиент Петров, телефон 89991234567, бюджет 8 млн, Академический&#10;или: Двушка ул Ленина, 54 м2, 5 этаж, 6.5 млн"
+              placeholder="Текст появится здесь после речи или введите вручную"
               placeholderTextColor={colors.textTertiary}
               multiline
               textAlignVertical="top"
@@ -191,7 +225,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
               }}
               onPress={runParse}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Распознать и создать</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Создать карточку</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -233,7 +267,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
                 style={[styles.modalBtn, { flex: 1, backgroundColor: colors.surfaceMuted }]}
                 onPress={() => setShowResult(false)}
               >
-                <Text style={{ color: colors.textPrimary }}>Изменить текст</Text>
+                <Text style={{ color: colors.textPrimary }}>Изменить</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { flex: 1, backgroundColor: colors.success }]}
