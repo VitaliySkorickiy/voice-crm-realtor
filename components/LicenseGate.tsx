@@ -60,11 +60,8 @@ export default function LicenseGate({ children }: Props) {
   const onBuy = async () => {
     setBusy(true);
     try {
-      const { message, testKey } = await startPurchaseStub();
-      Alert.alert('Оплата (заглушка)', message + '\n\nТестовый ключ:\n' + testKey, [
-        { text: 'Вставить ключ', onPress: () => setKeyInput(testKey) },
-        { text: 'OK' },
-      ]);
+      const { message } = await startPurchaseStub();
+      Alert.alert('Оплата', message);
     } finally {
       setBusy(false);
     }

@@ -1,19 +1,28 @@
 # Голосовая CRM риелтора
 
-## Структура
-
-```
-App.tsx
-styles.ts
-lib/          utils, seed, storage, theme, store
-components/   ui
-screens/      Dashboard, Clients, Properties, Voice, Settings...
-```
+Рабочая версия под **Expo SDK 57** / Expo Go 57.
 
 ## Установка
 
 ```bash
 npm install --legacy-peer-deps
-npx expo install @react-navigation/bottom-tabs @react-navigation/native @react-navigation/native-stack react-native-screens react-native-safe-area-context expo-notifications @react-native-community/datetimepicker
+npx expo install --fix -- --legacy-peer-deps
 npx expo start --clear
+```
+
+## Возможности
+
+- Клиенты, объекты, задачи, воронка
+- AsyncStorage (данные на устройстве)
+- Фото из галереи
+- Напоминания с календарём и временем (как будильник)
+
+## Структура
+
+```
+App.tsx
+styles.ts
+lib/
+components/
+screens/
 ```

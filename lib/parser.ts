@@ -9,9 +9,16 @@ function norm(s: string) {
 }
 
 function extractPhone(text: string): string {
-  const m = text.match(/(?:\+?7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
-  if (!m) return '';
-  return maskPhone(getDigitsOnly(m[0]));
+  // 1) full +7/8
+  let m = text.match(/(?:\+?7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
+  if (m) return maskPhone(getDigitsOnly(m[0]));
+  // 2) 10 digits starting with 9 (mobile without country code)
+  m = text.match(/\b9\d{9}\b/);
+  if (m) return maskPhone('7' + m[0]);
+  // 3) 11 digits starting with 7 or 8
+  m = text.match(/\b[78]\d{10}\b/);
+  if (m) return maskPhone(m[0]);
+  return '';
 }
 
 function extractMoney(text: string): number | null {
@@ -112,7 +119,7 @@ export function parseVoiceText(raw: string): ParseResult {
   const pScore = scoreProperty(n) + (area ? 1 : 0) + (rooms ? 1 : 0);
 
   if (cScore >= pScore) {
-    const budget = money || 5_000_000;
+    const budget = money || 0;
     return {
       type: 'client',
       confidence: cScore,
@@ -137,7 +144,7 @@ export function parseVoiceText(raw: string): ParseResult {
     };
   }
 
-  const price = money || 5_000_000;
+  const price = money || 0;
   const titleParts = [rooms || '', street || district || ''].filter(Boolean);
   return {
     type: 'property',

@@ -93,11 +93,19 @@ export default function VoiceRecordScreen({ navigation }: any) {
     if (!text) {
       Alert.alert(
         'Нет текста',
-        'Пока Vosk не подключён: надиктуйте мысль и введите/вставьте текст в поле (например: «Клиент Иванов, телефон 999 123 45 67, бюджет 7 млн» или «Двушка на Ленина 15, 54 метра, 6.5 млн»).'
+        'Введите или вставьте текст заметки. Пример: «Клиент Иванов, телефон 9991234567, бюджет 7 млн» или «Двушка ул Ленина, 54 м2, 5 этаж, 6.5 млн».'
       );
       return;
     }
     const result = parseVoiceText(text);
+    if (result.type === 'client' && !result.data.phone) {
+      Alert.alert('Не хватает данных', 'Для клиента нужен телефон. Добавьте номер в текст.');
+      return;
+    }
+    if (result.type === 'property' && !result.data.price) {
+      Alert.alert('Не хватает данных', 'Для объекта нужна цена. Добавьте сумму в текст.');
+      return;
+    }
     setParsedEntity(result);
     setShowResult(true);
   };

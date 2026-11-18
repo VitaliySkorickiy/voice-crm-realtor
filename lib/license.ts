@@ -101,10 +101,10 @@ export async function getLicenseStatus(): Promise<LicenseStatus> {
     return {
       ready: true,
       isLicensed: false,
-      isTrialActive: true,
-      canUse: true,
+      isTrialActive: false,
+      canUse: false,
       firstLaunchAt: null,
-      trialDaysLeft: TRIAL_DAYS,
+      trialDaysLeft: 0,
       licenseKeyMasked: null,
     };
   }
@@ -132,11 +132,9 @@ export async function debugResetTrial(): Promise<void> {
  * Заглушка оплаты: позже здесь deep-link / WebView на ЮKassa, CloudPayments и т.д.
  * Сейчас возвращает инструкцию и тестовый ключ для проверки UI.
  */
-export async function startPurchaseStub(): Promise<{ message: string; testKey: string }> {
-  const testKey = generateDevKey();
+export async function startPurchaseStub(): Promise<{ message: string; testKey?: string }> {
   return {
     message:
-      'Оплата пока в режиме заглушки. После подключения платёжного шлюза здесь откроется форма оплаты. Для проверки активации используйте тестовый ключ.',
-    testKey,
+      'Оплата пока не подключена. После интеграции платёжного шлюза здесь откроется форма. Ключ активации придёт на почту после оплаты.',
   };
 }

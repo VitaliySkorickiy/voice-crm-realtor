@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../lib/theme';
@@ -17,15 +18,20 @@ import { styles } from '../styles';
 export default function PropertyDetailScreen({ route, navigation }: any) {
   const { colors } = useTheme();
   const { addProperty, updateProperty } = useStore();
-  const { property: initialProperty, isNew } = route.params;
-  const [isEditing, setIsEditing] = useState(isNew);
+  const { property: initialProperty, isNew: isNewParam } = route.params;
+  const [isNew, setIsNew] = useState(!!isNewParam);
+  const [isEditing, setIsEditing] = useState(!!isNewParam);
   const [form, setForm] = useState({ ...initialProperty, photos: initialProperty.photos || (initialProperty.photo ? [initialProperty.photo] : []) });
   const [saved, setSaved] = useState(false);
 
   const update = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
   const handleSave = () => {
-    if (isNew) addProperty(form);
-    else updateProperty(form.id, form);
+    if (isNew) {
+      addProperty(form);
+      setIsNew(false);
+    } else {
+      updateProperty(form.id, form);
+    }
     setIsEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -49,12 +55,27 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
         selectionLimit: 5 - (form.photos || []).length,
       });
       if (result.canceled || !result.assets?.length) return;
-      const uris = result.assets.map((a) => a.uri);
-      const merged = [...(form.photos || []), ...uris].slice(0, 5);
+
+      const dir = FileSystem.documentDirectory + 'photos/';
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+
+      const savedUris: string[] = [];
+      for (const asset of result.assets) {
+        const ext = (asset.uri.split('.').pop() || 'jpg').split('?')[0];
+        const dest = dir + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ext;
+        try {
+          await FileSystem.copyAsync({ from: asset.uri, to: dest });
+          savedUris.push(dest);
+        } catch (copyErr) {
+          console.log('copy photo failed', copyErr);
+          savedUris.push(asset.uri); // fallback
+        }
+      }
+      const merged = [...(form.photos || []), ...savedUris].slice(0, 5);
       update('photos', merged);
     } catch (e) {
       console.log(e);
-      Alert.alert('Ошибка', 'Не удалось выбрать фото. Проверьте: npx expo install expo-image-picker');
+      Alert.alert('Ошибка', 'Не удалось выбрать или сохранить фото');
     }
   };
 

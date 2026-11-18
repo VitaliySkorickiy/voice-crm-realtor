@@ -21,8 +21,10 @@ export default function ClientsScreen({ navigation }: any) {
 
   const filtered = clients.filter((c: any) => {
     if (!query.trim()) return true;
-    const q = query.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.district.toLowerCase().includes(q);
+    const q = (query || '').toLowerCase();
+    return String(c.name || '').toLowerCase().includes(q) ||
+           String(c.phone || '').includes(q) ||
+           String(c.district || '').toLowerCase().includes(q);
   });
 
   return (

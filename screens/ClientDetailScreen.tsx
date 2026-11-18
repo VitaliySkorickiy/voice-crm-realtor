@@ -16,8 +16,9 @@ import { styles } from '../styles';
 export default function ClientDetailScreen({ route, navigation }: any) {
   const { colors } = useTheme();
   const { addClient, updateClient, properties } = useStore();
-  const { client: initialClient, isNew } = route.params;
-  const [isEditing, setIsEditing] = useState(isNew);
+  const { client: initialClient, isNew: isNewParam } = route.params;
+  const [isNew, setIsNew] = useState(!!isNewParam);
+  const [isEditing, setIsEditing] = useState(!!isNewParam);
   const [form, setForm] = useState({ ...initialClient });
   const [saved, setSaved] = useState(false);
   const [showPropPicker, setShowPropPicker] = useState(false);
@@ -25,18 +26,23 @@ export default function ClientDetailScreen({ route, navigation }: any) {
 
   const update = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
   const handleSave = () => {
-    if (isNew) addClient(form);
-    else updateClient(form.id, form);
+    if (isNew) {
+      addClient(form);
+      setIsNew(false); // больше не создаём дубликат при повторном сохранении
+    } else {
+      updateClient(form.id, form);
+    }
     setIsEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const shownProps = Array.isArray(form.shownProperties) ? form.shownProperties : [];
-  const filteredPropsForPicker = properties.filter((p: any) =>
-    p.title.toLowerCase().includes(propSearch.toLowerCase()) ||
-    p.street.toLowerCase().includes(propSearch.toLowerCase())
-  );
+  const filteredPropsForPicker = properties.filter((p: any) => {
+    const q = (propSearch || '').toLowerCase();
+    return String(p.title || '').toLowerCase().includes(q) ||
+           String(p.street || '').toLowerCase().includes(q);
+  });
 
   const addShownProperty = (prop: any) => {
     const exists = shownProps.find((sp: any) => sp.propertyId === prop.id);

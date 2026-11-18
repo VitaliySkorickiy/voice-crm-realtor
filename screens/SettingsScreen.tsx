@@ -117,7 +117,8 @@ export default function SettingsScreen() {
                     style: 'destructive',
                     onPress: async () => {
                       await clearDB();
-                      Alert.alert('Готово', 'Перезапустите приложение');
+                      replaceAll({ clients: [], properties: [], tasks: [] });
+                      Alert.alert('Готово', 'Данные очищены. При следующем запуске появятся демо-данные.');
                     },
                   },
                 ]

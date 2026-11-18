@@ -22,10 +22,18 @@ export default function PropertiesScreen({ navigation }: any) {
   const [filters, setFilters] = useState({ minPrice: '', maxPrice: '', minArea: '', maxArea: '', rooms: '' });
 
   const filtered = properties.filter((p: any) => {
-    const matchesText = !query.trim() || p.title.toLowerCase().includes(query.toLowerCase()) || p.street.toLowerCase().includes(query.toLowerCase()) || p.district.toLowerCase().includes(query.toLowerCase());
+    const q = (query || '').toLowerCase();
+    const matchesText = !query.trim() ||
+      String(p.title || '').toLowerCase().includes(q) ||
+      String(p.street || '').toLowerCase().includes(q) ||
+      String(p.district || '').toLowerCase().includes(q);
     const matchesPrice = (!filters.minPrice || p.price >= parseInt(filters.minPrice)) && (!filters.maxPrice || p.price <= parseInt(filters.maxPrice));
     const matchesArea = (!filters.minArea || p.areaTotal >= parseFloat(filters.minArea)) && (!filters.maxArea || p.areaTotal <= parseFloat(filters.maxArea));
-    const matchesRooms = !filters.rooms || p.rooms === filters.rooms;
+    const roomsVal = String(p.rooms || '');
+    const matchesRooms = !filters.rooms ||
+      (filters.rooms === '4+ комнатная'
+        ? /^(4|5|6|7|8|9|10)\+?-комнат/.test(roomsVal) || roomsVal.startsWith('4-') || roomsVal.startsWith('5-')
+        : roomsVal === filters.rooms);
     return matchesText && matchesPrice && matchesArea && matchesRooms;
   });
 
