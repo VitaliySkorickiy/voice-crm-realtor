@@ -25,8 +25,8 @@ npx expo install --fix -- --legacy-peer-deps
    https://alphacephei.com/vosk/models  
    Рекомендуется `vosk-model-small-ru-0.22` (~45 МБ).
 
-2. Распакуйте содержимое архива в папку проекта:  
-   `assets/model-ru-ru/`  
+2. Распакуйте архив в папку проекта как:  
+   `assets/vosk-model-small-ru-0.22/`  
    (внутри должны быть файлы модели: `am/`, `graph/`, `conf/` и т.д.)
 
 3. Соберите development или production build (Expo Go не поддерживает нативные модули Vosk):
@@ -47,7 +47,7 @@ App.tsx
 lib/           storage, store, theme, parser, vosk, matching, license, backup
 components/    ui, LicenseGate
 screens/       Dashboard, Clients, Properties, Voice, Settings
-assets/        icon, splash, model-ru-ru (модель Vosk)
+assets/        icon, splash, vosk-model-small-ru-0.22 (модель Vosk)
 ```
 
 ## Приватность

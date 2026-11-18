@@ -6,12 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ru.voicecrm.realtor",
@@ -41,9 +35,22 @@
         "react-native-vosk",
         {
           "models": [
-            "assets/model-ru-ru"
+            "assets/vosk-model-small-ru-0.22"
           ],
           "iOSMicrophonePermission": "Приложению нужен доступ к микрофону для голосовых заметок риелтора"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-sqlite",
+      "expo-status-bar",
+      "expo-sharing",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
         }
       ]
     ],

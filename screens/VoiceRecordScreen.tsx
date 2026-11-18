@@ -51,7 +51,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
       Alert.alert(
         'Vosk недоступен',
         (e?.message || 'Ошибка загрузки модели') +
-          '\n\nНужен development build (не Expo Go) и модель в assets/model-ru-ru.\nСкачайте vosk-model-small-ru-0.22 и положите содержимое в assets/model-ru-ru.'
+          '\n\nНужен development build (не Expo Go) и модель в assets/vosk-model-small-ru-0.22.\nСкачайте vosk-model-small-ru-0.22 и распакуйте в assets/vosk-model-small-ru-0.22.'
       );
     } finally {
       setModelLoading(false);

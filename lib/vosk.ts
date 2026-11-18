@@ -1,9 +1,11 @@
 /**
  * Офлайн-распознавание речи через Vosk.
- * Модель должна лежать в assets/model-ru-ru (скачать vosk-model-small-ru-0.22).
+ * Модель должна лежать в assets/vosk-model-small-ru-0.22.
  * Работает только в development/production build, не в Expo Go.
  */
 import { Platform } from 'react-native';
+
+const VOSK_MODEL_NAME = 'vosk-model-small-ru-0.22';
 
 let voskInstance: any = null;
 let loaded = false;
@@ -27,10 +29,10 @@ export async function ensureModelLoaded(): Promise<void> {
   if (Platform.OS === 'web') throw new Error('Vosk недоступен в браузере');
   const vosk = await getVosk();
   try {
-    await vosk.loadModel('model-ru-ru');
+    await vosk.loadModel(VOSK_MODEL_NAME);
     loaded = true;
   } catch (e: any) {
-    loadError = e?.message || 'Не удалось загрузить модель model-ru-ru';
+    loadError = e?.message || `Не удалось загрузить модель ${VOSK_MODEL_NAME}`;
     throw new Error(loadError);
   }
 }

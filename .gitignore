@@ -4,4 +4,3 @@ dist/
 .DS_Store
 desktop.ini
 *.log
-package-lock.json
