@@ -1,21 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
-  TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking, Share
+  Image, KeyboardAvoidingView, Platform, Alert, Share
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
-import * as Notifications from 'expo-notifications';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
-import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
-import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton, makeCall } from '../components/ui';
+import { formatPrice } from '../lib/utils';
+import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton } from '../components/ui';
 import { styles } from '../styles';
+
+async function deletePhotoFileIfLocal(uri: string | null | undefined) {
+  if (!uri || Platform.OS === 'web') return;
+  const base = FileSystem.documentDirectory;
+  if (!base) return;
+  const photosPrefix = base + 'photos/';
+  if (!uri.startsWith(photosPrefix)) return;
+  try {
+    await FileSystem.deleteAsync(uri, { idempotent: true });
+  } catch (e) {
+    console.log('removePhoto file delete failed', e);
+  }
+}
 
 export default function PropertyDetailScreen({ route, navigation }: any) {
   const { colors } = useTheme();
@@ -48,12 +58,14 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
 
   const update = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
   const handleSave = () => {
+    const payload = { ...form, checklist };
     if (isNew) {
-      addProperty(form);
+      addProperty(payload);
       setIsNew(false);
     } else {
-      updateProperty(form.id, form);
+      updateProperty(payload.id, payload);
     }
+    setForm(payload);
     setIsEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -102,8 +114,13 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
   };
 
   const removePhoto = (index: number) => {
-    const newPhotos = form.photos.filter((_: any, i: number) => i !== index);
+    const removed = form.photos?.[index];
+    const newPhotos = (form.photos || []).filter((_: any, i: number) => i !== index);
     update('photos', newPhotos);
+    deletePhotoFileIfLocal(removed).catch(() => {});
+    if (!isNew) {
+      updateProperty(form.id, { ...form, photos: newPhotos, checklist });
+    }
   };
   const sendClientPresentation = async () => {
     const lines = [
@@ -242,6 +259,9 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
                   next[idx] = next[idx].startsWith('✓ ') ? next[idx].slice(2) : '✓ ' + next[idx];
                   setChecklist(next);
                   update('checklist', next);
+                  if (!isNew) {
+                    updateProperty(form.id, { ...form, checklist: next });
+                  }
                 }}
               >
                 <Ionicons

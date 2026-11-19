@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
-  TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking, Share
+  TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Alert, Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
-import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
+import { formatPrice } from '../lib/utils';
 import { matchProperties } from '../lib/matching';
-import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton, makeCall } from '../components/ui';
+import { FormField, FormInput, ReadOnlyField, ChipSelector, makeCall } from '../components/ui';
 import { styles } from '../styles';
 
 export default function ClientDetailScreen({ route, navigation }: any) {

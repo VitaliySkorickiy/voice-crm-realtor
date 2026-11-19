@@ -10,12 +10,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getLicenseStatus,
   activateLicense,
-  startPurchaseStub,
+  getHowToBuyInfo,
+  SUPPORT_EMAIL,
   TRIAL_DAYS,
   type LicenseStatus,
 } from '../lib/license';
@@ -57,14 +59,12 @@ export default function LicenseGate({ children }: Props) {
     }
   };
 
-  const onBuy = async () => {
-    setBusy(true);
-    try {
-      const { message } = await startPurchaseStub();
-      Alert.alert('Оплата', message);
-    } finally {
-      setBusy(false);
-    }
+  const onHowToBuy = () => {
+    const { title, message } = getHowToBuyInfo();
+    Alert.alert(title, message, [
+      { text: 'Написать', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {}) },
+      { text: 'OK' },
+    ]);
   };
 
   if (!status || !status.ready) {
@@ -79,7 +79,6 @@ export default function LicenseGate({ children }: Props) {
     return <>{children}</>;
   }
 
-  // Триал истёк — только активация
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -91,8 +90,8 @@ export default function LicenseGate({ children }: Props) {
         </View>
         <Text style={styles.title}>Пробный период закончился</Text>
         <Text style={styles.sub}>
-          {TRIAL_DAYS} дней бесплатного доступа истекли. Активируйте лицензию, чтобы продолжить работу
-          с клиентами и объектами.
+          {TRIAL_DAYS} дней бесплатного доступа истекли. Активируйте лицензию ключом после оплаты,
+          чтобы продолжить работу с клиентами и объектами.
         </Text>
 
         <Text style={styles.label}>Ключ активации</Text>
@@ -116,16 +115,16 @@ export default function LicenseGate({ children }: Props) {
 
         <TouchableOpacity
           style={[styles.btn, styles.btnSecondary, busy && styles.btnDisabled]}
-          onPress={onBuy}
+          onPress={onHowToBuy}
           disabled={busy}
         >
-          <Ionicons name="card-outline" size={18} color="#0066FF" />
-          <Text style={styles.btnSecondaryText}>Купить лицензию</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#0066FF" />
+          <Text style={styles.btnSecondaryText}>Как купить</Text>
         </TouchableOpacity>
 
         <Text style={styles.hint}>
-          Оплата будет подключена позже (ЮKassa / другой шлюз). Сейчас доступна проверка активации
-          тестовым ключом.
+          Оплата — перевод самозанятому (СБП) вне приложения. Ключ придёт после оплаты. В приложении
+          нет встроенной оплаты и данные CRM на сервер не уходят.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

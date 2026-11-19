@@ -20,7 +20,7 @@ async function getVosk() {
     return voskInstance;
   } catch (e: any) {
     loadError = e?.message || 'react-native-vosk не найден (нужен dev build)';
-    throw new Error(loadError);
+    throw new Error(loadError || 'react-native-vosk не найден');
   }
 }
 
@@ -31,9 +31,20 @@ export async function ensureModelLoaded(): Promise<void> {
   try {
     await vosk.loadModel(VOSK_MODEL_NAME);
     loaded = true;
+    loadError = null;
   } catch (e: any) {
     loadError = e?.message || `Не удалось загрузить модель ${VOSK_MODEL_NAME}`;
-    throw new Error(loadError);
+    throw new Error(loadError || 'Не удалось загрузить модель Vosk');
+  }
+}
+
+/** @deprecated используйте ensureModelLoaded — оставлено для совместимости */
+export async function loadModel(): Promise<boolean> {
+  try {
+    await ensureModelLoaded();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -45,7 +56,11 @@ export function getVoskError(): string | null {
   return loadError;
 }
 
-export async function startListening(onPartial: (text: string) => void, onFinal: (text: string) => void): Promise<void> {
+export async function startListening(
+  onPartial: (text: string) => void,
+  onFinal: (text: string) => void,
+  onError?: (message: string) => void
+): Promise<void> {
   const vosk = await getVosk();
   await ensureModelLoaded();
 
@@ -65,7 +80,10 @@ export async function startListening(onPartial: (text: string) => void, onFinal:
     if (text) onFinal(String(text));
   });
   vosk.onError((err: any) => {
+    const message = typeof err === 'string' ? err : (err?.message || String(err) || 'Ошибка распознавания');
+    loadError = message;
     console.log('Vosk error', err);
+    onError?.(message);
   });
 
   await vosk.start();

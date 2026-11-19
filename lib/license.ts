@@ -3,6 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /** Длительность триала (дней) */
 export const TRIAL_DAYS = 7;
 
+/** Контакт продавца для оплаты и выдачи ключа (замените на свой) */
+export const SUPPORT_EMAIL = 'voice.crm.realtor@gmail.com';
+export const SUPPORT_TELEGRAM = '@voice_crm_support';
+
 const KEY_FIRST_LAUNCH = 'voicecrm_license_first_launch';
 const KEY_LICENSE = 'voicecrm_license_key';
 const KEY_LICENSE_ACTIVATED_AT = 'voicecrm_license_activated_at';
@@ -24,9 +28,9 @@ export type LicenseStatus = {
 };
 
 /**
- * Простая локальная проверка ключа (заглушка под будущий Ed25519 / сервер).
+ * Локальная проверка ключа (без сервера — CRM не уходит в облако).
  * Формат: VCRM-XXXX-XXXX-XXXX-XXXX где X = A-Z/0-9
- * Контрольная сумма: сумма charCode % 97 === 13 (лёгкая защита от опечаток)
+ * Контрольная сумма: сумма charCode % 97 === 13 (защита от опечаток)
  */
 export function validateLicenseKeyFormat(raw: string): { ok: boolean; normalized: string; reason?: string } {
   const normalized = raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -46,9 +50,6 @@ export function validateLicenseKeyFormat(raw: string): { ok: boolean; normalized
   }
   return { ok: true, normalized };
 }
-
-/** Тестовый ключ для разработки (проходит checksum) — подобрать или сгенерировать */
-// Тестовый ключ убран из UX. Генерация только на стороне продавца после оплаты.
 
 function maskKey(key: string): string {
   if (key.length < 10) return '••••';
@@ -120,18 +121,17 @@ export async function clearLicense(): Promise<void> {
   await AsyncStorage.multiRemove([KEY_LICENSE, KEY_LICENSE_ACTIVATED_AT]);
 }
 
-/** Сброс триала только для отладки */
-export async function debugResetTrial(): Promise<void> {
-  await AsyncStorage.multiRemove([KEY_FIRST_LAUNCH, KEY_LICENSE, KEY_LICENSE_ACTIVATED_AT]);
-}
-
 /**
- * Заглушка оплаты: позже здесь deep-link / WebView на ЮKassa, CloudPayments и т.д.
- * Сейчас возвращает инструкцию и тестовый ключ для проверки UI.
+ * Инструкция по покупке вне приложения (СБП / перевод самозанятому).
+ * Внутри приложения оплаты нет — только ввод ключа после оплаты.
  */
-export async function startPurchaseStub(): Promise<{ message: string; testKey?: string }> {
+export function getHowToBuyInfo(): { title: string; message: string } {
   return {
+    title: 'Как купить',
     message:
-      'Оплата пока не подключена. После интеграции платёжного шлюза здесь откроется форма. Ключ активации придёт на почту после оплаты.',
+      'Оплата проходит вне приложения: перевод самозанятому (СБП / по реквизитам).\n\n' +
+      'После оплаты вы получите ключ активации и введёте его здесь.\n\n' +
+      `Контакт: ${SUPPORT_TELEGRAM}\nEmail: ${SUPPORT_EMAIL}\n\n` +
+      'Данные CRM на сервер не отправляются.',
   };
 }

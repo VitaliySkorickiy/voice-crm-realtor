@@ -1,22 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
-  TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking
+  TextInput, Switch, Alert, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import Constants from 'expo-constants';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
 import { clearDB } from '../lib/storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { exportBackup, importBackupFromPicker } from '../lib/backup';
-import { getLicenseStatus, activateLicense, startPurchaseStub, debugResetTrial, TRIAL_DAYS, type LicenseStatus } from '../lib/license';
-import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
-import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton, makeCall } from '../components/ui';
+import {
+  getLicenseStatus,
+  activateLicense,
+  getHowToBuyInfo,
+  SUPPORT_EMAIL,
+  SUPPORT_TELEGRAM,
+  TRIAL_DAYS,
+  type LicenseStatus,
+} from '../lib/license';
 import { styles } from '../styles';
+
+const APP_VERSION =
+  Constants.expoConfig?.version ||
+  Constants.nativeAppVersion ||
+  '1.0.0';
 
 export default function SettingsScreen() {
   const { isDark, toggleTheme, colors } = useTheme();
@@ -30,6 +39,14 @@ export default function SettingsScreen() {
   }, []);
 
   const refreshLic = async () => setLic(await getLicenseStatus());
+
+  const showHowToBuy = () => {
+    const { title, message } = getHowToBuyInfo();
+    Alert.alert(title, message, [
+      { text: 'Написать', onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {}) },
+      { text: 'OK' },
+    ]);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -83,12 +100,9 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1, backgroundColor: colors.accentSoft, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={async () => {
-                    const { message } = await startPurchaseStub();
-                    Alert.alert('Оплата', message);
-                  }}
+                  onPress={showHowToBuy}
                 >
-                  <Text style={{ color: colors.accent, fontWeight: '600' }}>Купить</Text>
+                  <Text style={{ color: colors.accent, fontWeight: '600' }}>Как купить</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -109,7 +123,7 @@ export default function SettingsScreen() {
             onPress={() => {
               Alert.alert(
                 'Сбросить данные',
-                'Удалить всех клиентов, объекты и задачи? При следующем запуске снова появятся демо-данные.',
+                'Удалить всех клиентов, объекты, задачи и локальные фото? База останется пустой. Демо-данные снова не появятся — восстановить можно только из файла бэкапа.',
                 [
                   { text: 'Отмена', style: 'cancel' },
                   {
@@ -118,14 +132,13 @@ export default function SettingsScreen() {
                     onPress: async () => {
                       try {
                         await clearDB();
-                        // удалить сохранённые фото
                         const photosDir = FileSystem.documentDirectory + 'photos/';
                         try {
                           const info = await FileSystem.getInfoAsync(photosDir);
                           if (info.exists) await FileSystem.deleteAsync(photosDir, { idempotent: true });
                         } catch {}
                         replaceAll({ clients: [], properties: [], tasks: [] });
-                        Alert.alert('Готово', 'Данные и фото очищены. При следующем запуске появятся демо-данные.');
+                        Alert.alert('Готово', 'Данные и фото очищены. База пустая.');
                       } catch (e: any) {
                         Alert.alert('Ошибка', e?.message || 'Не удалось сбросить данные');
                       }
@@ -144,7 +157,7 @@ export default function SettingsScreen() {
         </View>
         <View style={[styles.infoCard, { backgroundColor: colors.card, marginBottom: 16 }]}>
           <View style={[styles.settingRow, { marginBottom: 8 }]}>
-            <Ionicons name="cloud-upload-outline" size={24} color={colors.accent} />
+            <Ionicons name="save-outline" size={24} color={colors.accent} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Резервная копия</Text>
               <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>
@@ -193,16 +206,29 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
         <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-          <View style={styles.settingRow}>
+          <View style={[styles.settingRow, { marginBottom: 12 }]}>
             <Ionicons name="information-circle-outline" size={24} color={colors.accent} />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Версия приложения</Text>
-              <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>1.0.0 (фронтенд)</Text>
+              <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>О приложении</Text>
+              <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>Версия {APP_VERSION}</Text>
             </View>
           </View>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 20, marginBottom: 10 }}>
+            Голосовая CRM для риелторов. Клиенты, объекты и задачи хранятся только на этом устройстве.
+            Разработчик не получает и не обрабатывает персональные данные ваших клиентов.
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 20, marginBottom: 10 }}>
+            Разработчик: самозанятый. Оплата лицензии — СБП / перевод вне приложения, ключ вручную.
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => Alert.alert('Контакт', SUPPORT_EMAIL))}
+            style={{ marginBottom: 6 }}
+          >
+            <Text style={{ color: colors.accent, fontSize: 14 }}>Email: {SUPPORT_EMAIL}</Text>
+          </TouchableOpacity>
+          <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Telegram: {SUPPORT_TELEGRAM}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-

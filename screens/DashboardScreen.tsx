@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
-  TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking
+  TextInput, Platform, Modal, Pressable, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +9,7 @@ import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
-import { generateId, formatPrice, formatPriceShort, formatTime, isSameDay, maskPhone, getDigitsOnly } from '../lib/utils';
-import { FormField, FormInput, ReadOnlyField, ChipSelector, ToggleButton, makeCall } from '../components/ui';
+import { generateId, formatTime, isSameDay } from '../lib/utils';
 import { styles } from '../styles';
 
 export default function DashboardScreen({ navigation }: any) {
@@ -111,7 +109,7 @@ export default function DashboardScreen({ navigation }: any) {
     if (Platform.OS === 'web') {
       Alert.alert(
         'Только на телефоне',
-        'Браузер не умеет локальные будильники. Откройте проект в Expo Go на телефоне.'
+        'Браузер не умеет локальные будильники. Откройте установленное приложение на телефоне.'
       );
       return;
     }
@@ -121,7 +119,7 @@ export default function DashboardScreen({ navigation }: any) {
       if (!ok) {
         Alert.alert(
           'Нет доступа к уведомлениям',
-          'Настройки телефона → Приложения → Expo Go → Уведомления → разрешите.'
+          'Настройки телефона → Приложения → Голосовая CRM риелтора → Уведомления → разрешите.'
         );
         return;
       }
@@ -178,7 +176,7 @@ export default function DashboardScreen({ navigation }: any) {
       Alert.alert(
         'Не удалось поставить напоминание',
         msg + '\n\nПлатформа: ' + Platform.OS +
-          '\nПроверьте, что открыто Expo Go (не браузер) и разрешены уведомления.'
+          '\nПроверьте уведомления в настройках приложения и свободное место на устройстве.'
       );
     }
   };

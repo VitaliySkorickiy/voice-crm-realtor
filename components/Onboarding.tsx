@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../lib/theme';
@@ -15,7 +15,7 @@ const slides = [
   {
     icon: 'shield-checkmark-outline' as const,
     title: 'Данные только у вас',
-    text: 'Никаких серверов. Всё хранится на телефоне. Бэкап — в один зашифрованный файл по вашему желанию.',
+    text: 'Никаких серверов. Всё хранится на телефоне. Бэкап — обычный JSON-файл, который вы сохраняете сами через «Поделиться».',
   },
   {
     icon: 'people-outline' as const,

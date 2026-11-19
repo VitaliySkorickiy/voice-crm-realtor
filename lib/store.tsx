@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { ActivityIndicator, View, Alert, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SEED_CLIENTS, SEED_PROPERTIES, SEED_TASKS } from './seed';
 import { loadDB, saveDB, isInitialized } from './storage';
 
@@ -28,12 +29,29 @@ export function useStore() {
   return ctx;
 }
 
+async function deleteLocalPhotoFiles(uris: (string | null | undefined)[]) {
+  if (Platform.OS === 'web') return;
+  const base = FileSystem.documentDirectory;
+  if (!base) return;
+  const photosPrefix = base + 'photos/';
+  for (const uri of uris) {
+    if (!uri || typeof uri !== 'string') continue;
+    if (!uri.startsWith(photosPrefix)) continue;
+    try {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    } catch (e) {
+      console.log('photo delete failed', uri, e);
+    }
+  }
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [ready, setReady] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const saveAlertShown = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,12 +62,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
 
       if (initialized && saved) {
-        // Уже работали с приложением — только сохранённые данные, без seed
         setClients(saved.clients);
         setProperties(saved.properties);
         setTasks(saved.tasks);
       } else if (!initialized) {
-        // Первый запуск — демо-данные один раз
         setClients(SEED_CLIENTS);
         setProperties(SEED_PROPERTIES);
         setTasks(SEED_TASKS);
@@ -66,10 +82,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Сохраняем после гидрации при любых изменениях
   useEffect(() => {
     if (!hydrated) return;
-    saveDB({ clients, properties, tasks });
+    let cancelled = false;
+    (async () => {
+      try {
+        await saveDB({ clients, properties, tasks });
+        saveAlertShown.current = false;
+      } catch (e: any) {
+        console.log('DB save error:', e);
+        if (!cancelled && !saveAlertShown.current) {
+          saveAlertShown.current = true;
+          Alert.alert(
+            'Не удалось сохранить',
+            e?.message || 'Ошибка записи базы на устройство. Проверьте свободное место и попробуйте снова.'
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [clients, properties, tasks, hydrated]);
 
   const addClient = useCallback((client: any) => setClients((p) => [client, ...p]), []);
@@ -84,7 +117,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (id: string, updated: any) => setProperties((p) => p.map((pr) => (pr.id === id ? { ...pr, ...updated } : pr))),
     []
   );
-  const deleteProperty = useCallback((id: string) => setProperties((p) => p.filter((pr) => pr.id !== id)), []);
+  const deleteProperty = useCallback((id: string) => {
+    setProperties((prev) => {
+      const target = prev.find((pr) => pr.id === id);
+      if (target) {
+        const uris = [
+          ...(Array.isArray(target.photos) ? target.photos : []),
+          target.photo,
+        ];
+        deleteLocalPhotoFiles(uris).catch(() => {});
+      }
+      return prev.filter((pr) => pr.id !== id);
+    });
+  }, []);
 
   const updateTask = useCallback(
     (id: string, updated: any) => setTasks((p) => p.map((t) => (t.id === id ? { ...t, ...updated } : t))),
