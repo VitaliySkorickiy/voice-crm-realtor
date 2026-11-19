@@ -79,29 +79,25 @@ export async function loadDB(): Promise<DbPayload | null> {
 }
 
 export async function saveDB(data: DbPayload): Promise<void> {
-  try {
-    const db = await getDb();
-    await db.withTransactionAsync(async () => {
-      await db.execAsync('DELETE FROM clients; DELETE FROM properties; DELETE FROM tasks;');
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.execAsync('DELETE FROM clients; DELETE FROM properties; DELETE FROM tasks;');
 
-      for (const c of data.clients || []) {
-        if (!c?.id) continue;
-        await db.runAsync('INSERT OR REPLACE INTO clients (id, data) VALUES (?, ?)', c.id, JSON.stringify(c));
-      }
-      for (const p of data.properties || []) {
-        if (!p?.id) continue;
-        await db.runAsync('INSERT OR REPLACE INTO properties (id, data) VALUES (?, ?)', p.id, JSON.stringify(p));
-      }
-      for (const t of data.tasks || []) {
-        if (!t?.id) continue;
-        await db.runAsync('INSERT OR REPLACE INTO tasks (id, data) VALUES (?, ?)', t.id, JSON.stringify(t));
-      }
+    for (const c of data.clients || []) {
+      if (!c?.id) continue;
+      await db.runAsync('INSERT OR REPLACE INTO clients (id, data) VALUES (?, ?)', c.id, JSON.stringify(c));
+    }
+    for (const p of data.properties || []) {
+      if (!p?.id) continue;
+      await db.runAsync('INSERT OR REPLACE INTO properties (id, data) VALUES (?, ?)', p.id, JSON.stringify(p));
+    }
+    for (const t of data.tasks || []) {
+      if (!t?.id) continue;
+      await db.runAsync('INSERT OR REPLACE INTO tasks (id, data) VALUES (?, ?)', t.id, JSON.stringify(t));
+    }
 
-      await db.runAsync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', 'initialized', '1');
-    });
-  } catch (e) {
-    console.log('DB save error:', e);
-  }
+    await db.runAsync('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', 'initialized', '1');
+  });
 }
 
 export async function isInitialized(): Promise<boolean> {
@@ -117,15 +113,11 @@ export async function isInitialized(): Promise<boolean> {
 }
 
 export async function clearDB(): Promise<void> {
-  try {
-    const db = await getDb();
-    await db.execAsync(`
-      DELETE FROM clients;
-      DELETE FROM properties;
-      DELETE FROM tasks;
-      DELETE FROM meta;
-    `);
-  } catch (e) {
-    console.log('DB clear error:', e);
-  }
+  const db = await getDb();
+  await db.execAsync(`
+    DELETE FROM clients;
+    DELETE FROM properties;
+    DELETE FROM tasks;
+    DELETE FROM meta;
+  `);
 }

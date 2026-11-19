@@ -41,7 +41,7 @@ export async function exportBackup(data: DbPayload): Promise<void> {
   const fileName = `voice-crm-backup-${new Date().toISOString().slice(0, 10)}.vcdb.json`;
 
   try {
-    const FileSystem = await import('expo-file-system');
+    const FileSystem = await import('expo-file-system/legacy');
     const Sharing = await import('expo-sharing');
     const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
     if (!dir) throw new Error('no dir');
@@ -83,7 +83,7 @@ export async function importBackupFromPicker(): Promise<DbPayload> {
   let raw = '';
 
   try {
-    const FileSystem = await import('expo-file-system');
+    const FileSystem = await import('expo-file-system/legacy');
     if (asset.uri) {
       raw = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.UTF8,

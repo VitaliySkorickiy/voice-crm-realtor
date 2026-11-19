@@ -1,5 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * Web / fallback storage (AsyncStorage).
+ * On native Metro resolves `storage.native.ts` (SQLite) instead.
+ */
 export type DbPayload = {
   clients: any[];
   properties: any[];
@@ -26,12 +30,8 @@ export async function loadDB(): Promise<DbPayload | null> {
 }
 
 export async function saveDB(data: DbPayload): Promise<void> {
-  try {
-    await AsyncStorage.setItem(DB_KEY, JSON.stringify(data));
-    await AsyncStorage.setItem(INIT_KEY, '1');
-  } catch (e) {
-    console.log('Web DB save error:', e);
-  }
+  await AsyncStorage.setItem(DB_KEY, JSON.stringify(data));
+  await AsyncStorage.setItem(INIT_KEY, '1');
 }
 
 export async function isInitialized(): Promise<boolean> {
@@ -43,9 +43,5 @@ export async function isInitialized(): Promise<boolean> {
 }
 
 export async function clearDB(): Promise<void> {
-  try {
-    await AsyncStorage.multiRemove([DB_KEY, INIT_KEY]);
-  } catch (e) {
-    console.log('Web DB clear error:', e);
-  }
+  await AsyncStorage.multiRemove([DB_KEY, INIT_KEY]);
 }

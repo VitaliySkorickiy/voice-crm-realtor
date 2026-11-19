@@ -29,16 +29,26 @@ npx expo install --fix -- --legacy-peer-deps
    `assets/vosk-model-small-ru-0.22/`  
    (внутри должны быть файлы модели: `am/`, `graph/`, `conf/` и т.д.)
 
-3. Соберите development или production build (Expo Go не поддерживает нативные модули Vosk):
+3. Соберите APK через EAS (нативный Vosk не работает в Expo Go):
+
+```bash
+eas build -p android --profile preview
+# production:
+eas build -p android --profile production
+```
+
+Локально (опционально):
 
 ```bash
 npx expo prebuild
 npx expo run:android
-# или
-npx expo run:ios
 ```
 
-После первой сборки модель будет внутри приложения. Распознавание работает без интернета.
+После сборки модель Vosk внутри APK. Распознавание работает без интернета.
+
+### Лицензия
+
+Триал 7 дней на устройстве. Оплата — СБП / перевод самозанятому вне приложения; ключ вводится вручную. Встроенной оплаты (IAP) нет.
 
 ## Структура
 

@@ -10,7 +10,7 @@ import { useStore } from '../lib/store';
 import { styles } from '../styles';
 import { parseVoiceText } from '../lib/parser';
 import { generateId, formatPrice } from '../lib/utils';
-import { loadModel, startListening, stopListening, isVoskReady, getVoskError } from '../lib/vosk';
+import { ensureModelLoaded, startListening, stopListening, getVoskError } from '../lib/vosk';
 
 export default function VoiceRecordScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -22,8 +22,8 @@ export default function VoiceRecordScreen({ navigation }: any) {
   const [transcribedText, setTranscribedText] = useState('');
   const [parsedEntity, setParsedEntity] = useState<any>(null);
   const [showResult, setShowResult] = useState(false);
-  const [modelReady, setModelReady] = useState(isVoskReady());
   const [modelLoading, setModelLoading] = useState(false);
+  const [voskError, setVoskError] = useState<string | null>(getVoskError());
 
   // Linking note to existing card
   const [linkModal, setLinkModal] = useState<'client' | 'property' | null>(null);
@@ -49,31 +49,34 @@ export default function VoiceRecordScreen({ navigation }: any) {
 
   const startRecording = async () => {
     setModelLoading(true);
-    const ok = await loadModel();
-    setModelLoading(false);
-    setModelReady(ok);
-    if (!ok) {
-      Alert.alert('Vosk недоступен', getVoskError() || 'Не удалось загрузить модель.');
-      return;
-    }
-    finalParts.current = [];
-    setTranscribedText('');
-    const started = await startListening(
-      (partial) => setTranscribedText([...finalParts.current, partial].filter(Boolean).join(' ').trim()),
-      (finalText) => {
-        if (finalText) {
-          finalParts.current.push(finalText);
-          setTranscribedText(finalParts.current.join(' ').trim());
+    setVoskError(null);
+    try {
+      await ensureModelLoaded();
+      finalParts.current = [];
+      setTranscribedText('');
+      await startListening(
+        (partial) => setTranscribedText([...finalParts.current, partial].filter(Boolean).join(' ').trim()),
+        (finalText) => {
+          if (finalText) {
+            finalParts.current.push(finalText);
+            setTranscribedText(finalParts.current.join(' ').trim());
+          }
+        },
+        (message) => {
+          setVoskError(message);
+          Alert.alert('Распознавание', message);
         }
-      }
-    );
-    if (!started) {
-      Alert.alert('Микрофон', getVoskError() || 'Не удалось начать запись');
-      return;
+      );
+      setIsRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((p) => p + 1), 1000);
+    } catch (e: any) {
+      const message = e?.message || getVoskError() || 'Не удалось начать запись';
+      setVoskError(message);
+      Alert.alert('Голос недоступен', message);
+    } finally {
+      setModelLoading(false);
     }
-    setIsRecording(true);
-    setSeconds(0);
-    timerRef.current = setInterval(() => setSeconds((p) => p + 1), 1000);
   };
 
   const stopRecording = async () => {
@@ -202,7 +205,7 @@ export default function VoiceRecordScreen({ navigation }: any) {
                 <Text style={[styles.recordHint, { color: colors.textSecondary, textAlign: 'center', marginTop: 8 }]}>
                   {modelLoading ? 'Загрузка модели…' : isRecording ? 'Говорите… Нажмите ещё раз чтобы остановить' : 'Нажмите микрофон и диктуйте свободно'}
                 </Text>
-                {getVoskError() ? <Text style={{ color: colors.error, fontSize: 12, marginTop: 6 }}>{getVoskError()}</Text> : null}
+                {voskError ? <Text style={{ color: colors.error, fontSize: 12, marginTop: 6 }}>{voskError}</Text> : null}
               </View>
 
               <TouchableOpacity

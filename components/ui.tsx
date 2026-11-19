@@ -1,8 +1,27 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Linking, Alert } from 'react-native';
 import { useTheme } from '../lib/theme';
-import { maskPhone, digitsOnly, decimalOnly } from '../lib/utils';
+import { maskPhone, digitsOnly, decimalOnly, getDigitsOnly } from '../lib/utils';
 import { styles } from '../styles';
+
+/** Открыть dialer с номером (tel:) */
+export function makeCall(phone: string | null | undefined) {
+  const digits = getDigitsOnly(String(phone || ''));
+  if (!digits || digits.length < 10) {
+    Alert.alert('Нет номера', 'Укажите корректный телефон');
+    return;
+  }
+  const tel = digits.startsWith('8') && digits.length === 11
+    ? '+7' + digits.slice(1)
+    : digits.startsWith('7') && digits.length === 11
+      ? '+' + digits
+      : digits.startsWith('+')
+        ? digits
+        : '+' + digits;
+  Linking.openURL(`tel:${tel}`).catch(() => {
+    Alert.alert('Ошибка', 'Не удалось открыть приложение телефона');
+  });
+}
 
 export function FormField({ label, children, counter, required }: any) {
   const { colors } = useTheme();
