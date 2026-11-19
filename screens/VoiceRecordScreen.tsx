@@ -226,46 +226,18 @@ export default function VoiceRecordScreen({ navigation }: any) {
                 textAlignVertical="top"
               />
 
-              {/* Link buttons */}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, { flex: 1, backgroundColor: linkedClient ? colors.accent : colors.surfaceMuted }]}
-                  onPress={() => { setLinkSearch(''); setLinkModal('client'); }}
-                >
-                  <Text style={{ color: linkedClient ? 'white' : colors.textPrimary, fontSize: 13, textAlign: 'center' }} numberOfLines={1}>
-                    {linkedClient ? linkedClient.name : 'К клиенту'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalBtn, { flex: 1, backgroundColor: linkedProp ? colors.accent : colors.surfaceMuted }]}
-                  onPress={() => { setLinkSearch(''); setLinkModal('property'); }}
-                >
-                  <Text style={{ color: linkedProp ? 'white' : colors.textPrimary, fontSize: 13, textAlign: 'center' }} numberOfLines={1}>
-                    {linkedProp ? (linkedProp.title || linkedProp.street) : 'К объекту'}
-                  </Text>
-                </TouchableOpacity>
-                {(linkedClient || linkedProp) && (
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: colors.errorSoft, paddingHorizontal: 12 }]}
-                    onPress={() => { setLinkedClientId(null); setLinkedPropertyId(null); }}
-                  >
-                    <Ionicons name="close" size={18} color={colors.error} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
                 <TouchableOpacity
                   style={[styles.modalBtn, { flex: 1, backgroundColor: colors.accent }]}
                   onPress={saveAsNote}
                 >
-                  <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>Создать заметку</Text>
+                  <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>СОЗДАТЬ ЗАМЕТКУ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, { flex: 1, backgroundColor: colors.surfaceMuted }]}
                   onPress={tryParseCard}
                 >
-                  <Text style={{ color: colors.textPrimary, fontWeight: '600', textAlign: 'center' }}>Как карточку</Text>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '600', textAlign: 'center' }}>КАК КАРТОЧКУ</Text>
                 </TouchableOpacity>
               </View>
               <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 12 }}>
