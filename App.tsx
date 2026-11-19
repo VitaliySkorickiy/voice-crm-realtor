@@ -1,11 +1,12 @@
-import React from 'react';
-import { Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Platform, View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import * as Updates from 'expo-updates';
 
 import { ThemeProvider, useTheme } from './lib/theme';
 import { StoreProvider } from './lib/store';
@@ -35,7 +36,6 @@ const Stack = createNativeStackNavigator();
 function MainTabs() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  // Отступ под жестовую полоску / кнопки навигации Android/iOS
   const bottomPad = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
   const tabBarHeight = 56 + bottomPad;
 
@@ -105,6 +105,52 @@ function AppContent() {
 }
 
 export default function App() {
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(true);
+  const [updateStatus, setUpdateStatus] = useState('');
+
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        console.log('🔄 Проверяю обновления...');
+        setUpdateStatus('Проверка обновлений...');
+        
+        const update = await Updates.checkForUpdateAsync();
+        
+        if (update.isAvailable) {
+          console.log('✅ Найдено обновление, загружаю...');
+          setUpdateStatus('Загрузка обновления...');
+          
+          const result = await Updates.fetchUpdateAsync();
+          console.log('✅ Обновление загружено:', result);
+          
+          setUpdateStatus('Перезапуск приложения...');
+          setTimeout(() => {
+            Updates.reloadAsync();
+          }, 1000);
+        } else {
+          console.log('ℹ️ Обновлений нет');
+          setUpdateStatus('');
+          setIsCheckingUpdate(false);
+        }
+      } catch (error) {
+        console.log('❌ Ошибка проверки обновлений:', error);
+        setUpdateStatus('');
+        setIsCheckingUpdate(false);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
+
+  if (isCheckingUpdate && updateStatus) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0066FF" />
+        <Text style={styles.loadingText}>{updateStatus}</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
@@ -115,3 +161,19 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+});
