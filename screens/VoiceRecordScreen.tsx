@@ -1,36 +1,42 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, SafeAreaView, TextInput, Alert, Platform, ActivityIndicator,
+  View, Text, TouchableOpacity, TextInput, Alert, Platform,
+  SafeAreaView, ScrollView, KeyboardAvoidingView, Modal, FlatList,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../lib/theme';
 import { useStore } from '../lib/store';
-import { formatPrice } from '../lib/utils';
-import { parseVoiceText } from '../lib/parser';
-import { startListening, stopListening, ensureModelLoaded, isVoskReady, getVoskError } from '../lib/vosk';
 import { styles } from '../styles';
+import { parseVoiceText } from '../lib/parser';
+import { generateId, formatPrice } from '../lib/utils';
+import { loadModel, startListening, stopListening, isVoskReady, getVoskError } from '../lib/vosk';
 
 export default function VoiceRecordScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { addClient, addProperty } = useStore();
+  const insets = useSafeAreaInsets();
+  const { addClient, addProperty, addTask, clients, properties } = useStore();
+
   const [isRecording, setIsRecording] = useState(false);
-  const [modelReady, setModelReady] = useState(false);
-  const [modelLoading, setModelLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [transcribedText, setTranscribedText] = useState('');
-  const [showResult, setShowResult] = useState(false);
   const [parsedEntity, setParsedEntity] = useState<any>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [modelReady, setModelReady] = useState(isVoskReady());
+  const [modelLoading, setModelLoading] = useState(false);
+
+  // Linking note to existing card
+  const [linkModal, setLinkModal] = useState<'client' | 'property' | null>(null);
+  const [linkedClientId, setLinkedClientId] = useState<string | null>(null);
+  const [linkedPropertyId, setLinkedPropertyId] = useState<string | null>(null);
+  const [linkSearch, setLinkSearch] = useState('');
+
   const timerRef = useRef<any>(null);
   const finalParts = useRef<string[]>([]);
 
   useEffect(() => {
-    if (isRecording) timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-    else clearInterval(timerRef.current);
-    return () => clearInterval(timerRef.current);
-  }, [isRecording]);
-
-  useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
       stopListening().catch(() => {});
     };
   }, []);
@@ -41,66 +47,39 @@ export default function VoiceRecordScreen({ navigation }: any) {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const loadModel = async () => {
-    if (modelReady || modelLoading) return;
-    setModelLoading(true);
-    try {
-      await ensureModelLoaded();
-      setModelReady(true);
-    } catch (e: any) {
-      Alert.alert(
-        'Vosk недоступен',
-        (e?.message || 'Ошибка загрузки модели') +
-          '\n\nНужен development build (не Expo Go) и модель в assets/vosk-model-small-ru-0.22.\nСкачайте vosk-model-small-ru-0.22 и распакуйте в assets/vosk-model-small-ru-0.22.'
-      );
-    } finally {
-      setModelLoading(false);
-    }
-  };
-
   const startRecording = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Только на телефоне', 'Офлайн-распознавание работает в собранном приложении на устройстве.');
+    setModelLoading(true);
+    const ok = await loadModel();
+    setModelLoading(false);
+    setModelReady(ok);
+    if (!ok) {
+      Alert.alert('Vosk недоступен', getVoskError() || 'Не удалось загрузить модель.');
       return;
     }
-    if (!modelReady) {
-      await loadModel();
-      if (!isVoskReady()) return;
-    }
-    try {
-      finalParts.current = [];
-      setTranscribedText('');
-      setSeconds(0);
-      setIsRecording(true);
-      setShowResult(false);
-      setParsedEntity(null);
-
-      await startListening(
-        (partial) => {
-          // partial is live; show it
-          const base = finalParts.current.join(' ').trim();
-          setTranscribedText((base ? base + ' ' : '') + partial);
-        },
-        (finalText) => {
-          if (finalText && finalText.trim()) {
-            finalParts.current.push(finalText.trim());
-            setTranscribedText(finalParts.current.join(' '));
-          }
+    finalParts.current = [];
+    setTranscribedText('');
+    const started = await startListening(
+      (partial) => setTranscribedText([...finalParts.current, partial].filter(Boolean).join(' ').trim()),
+      (finalText) => {
+        if (finalText) {
+          finalParts.current.push(finalText);
+          setTranscribedText(finalParts.current.join(' ').trim());
         }
-      );
-    } catch (e: any) {
-      setIsRecording(false);
-      Alert.alert('Не удалось начать', e?.message || 'Ошибка Vosk. Можно ввести текст вручную.');
+      }
+    );
+    if (!started) {
+      Alert.alert('Микрофон', getVoskError() || 'Не удалось начать запись');
+      return;
     }
+    setIsRecording(true);
+    setSeconds(0);
+    timerRef.current = setInterval(() => setSeconds((p) => p + 1), 1000);
   };
 
   const stopRecording = async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
-    try {
-      await stopListening();
-    } catch (e) {
-      console.log('stop', e);
-    }
+    try { await stopListening(); } catch {}
   };
 
   const toggleRecording = async () => {
@@ -108,23 +87,74 @@ export default function VoiceRecordScreen({ navigation }: any) {
     else await startRecording();
   };
 
-  const runParse = () => {
+  const saveAsNote = () => {
     const text = transcribedText.trim();
     if (!text) {
-      Alert.alert('Нет текста', 'Надиктуйте или введите текст. Пример: «Клиент Иванов, телефон 9991234567, бюджет 7 млн»');
+      Alert.alert('Пусто', 'Надиктуйте или введите текст заметки');
       return;
     }
+    const linkedClient = linkedClientId ? clients.find((c: any) => c.id === linkedClientId) : null;
+    const linkedProp = linkedPropertyId ? properties.find((p: any) => p.id === linkedPropertyId) : null;
+
+    addTask({
+      id: generateId(),
+      title: text.slice(0, 120),
+      note: text,
+      type: 'note',
+      date: new Date().toISOString(),
+      done: false,
+      clientId: linkedClientId || null,
+      propertyId: linkedPropertyId || null,
+      clientName: linkedClient?.name || null,
+      propertyTitle: linkedProp?.title || linkedProp?.street || null,
+    });
+
+    const linkInfo = linkedClient ? ` к клиенту «${linkedClient.name}»` : linkedProp ? ` к объекту` : '';
+    Alert.alert('Заметка сохранена', `Записано как есть${linkInfo}`);
+    setTranscribedText('');
+    finalParts.current = [];
+    setSeconds(0);
+    setLinkedClientId(null);
+    setLinkedPropertyId(null);
+    navigation.goBack?.();
+  };
+
+  const tryParseCard = () => {
+    const text = transcribedText.trim();
+    if (!text) {
+      Alert.alert('Нет текста', 'Сначала надиктуйте');
+      return;
+    }
+    const lower = text.toLowerCase();
+    const wantsClient = /нов(ый|ого|ая)?\s+клиент|клиент\s+|создай\s+клиент/i.test(lower);
+    const wantsProperty = /нов(ый|ого|ое)?\s+объект|объект\s+|создай\s+объект|новая\s+квартира|новый\s+дом/i.test(lower);
+
     const result = parseVoiceText(text);
-    if (result.type === 'client' && !result.data.phone) {
-      Alert.alert('Не хватает данных', 'Для клиента нужен телефон. Добавьте номер.');
-      return;
+
+    if (result.type === 'client') {
+      const hasName = !!result.data.name && result.data.name !== 'Клиент из голоса';
+      const hasPhone = !!result.data.phone && result.data.phone.replace(/\D/g, '').length >= 10;
+      if ((hasName && hasPhone) || wantsClient) {
+        setParsedEntity(result);
+        setShowResult(true);
+        return;
+      }
     }
-    if (result.type === 'property' && !result.data.price) {
-      Alert.alert('Не хватает данных', 'Для объекта нужна цена. Добавьте сумму.');
-      return;
+
+    if (result.type === 'property') {
+      const hasAddress = !!(result.data.street || result.data.district);
+      const hasPrice = !!result.data.price;
+      if (wantsProperty || (hasAddress && hasPrice)) {
+        setParsedEntity(result);
+        setShowResult(true);
+        return;
+      }
     }
-    setParsedEntity(result);
-    setShowResult(true);
+
+    Alert.alert(
+      'Это заметка',
+      'Для создания карточки скажите «новый клиент» + имя и телефон, или «новый объект» + адрес. Иначе сохраните как заметку.'
+    );
   };
 
   const handleSaveEntity = () => {
@@ -137,148 +167,188 @@ export default function VoiceRecordScreen({ navigation }: any) {
       setTranscribedText('');
       setParsedEntity(null);
       finalParts.current = [];
-      setSeconds(0);
       navigation.goBack?.();
     } catch (e: any) {
-      Alert.alert('Ошибка сохранения', e?.message || 'Не удалось сохранить карточку');
+      Alert.alert('Ошибка', e?.message || 'Не удалось сохранить');
     }
   };
 
+  const linkedClient = linkedClientId ? clients.find((c: any) => c.id === linkedClientId) : null;
+  const linkedProp = linkedPropertyId ? properties.find((p: any) => p.id === linkedPropertyId) : null;
+
+  const filteredClients = clients.filter((c: any) =>
+    String(c.name || '').toLowerCase().includes(linkSearch.toLowerCase()) ||
+    String(c.phone || '').includes(linkSearch)
+  );
+  const filteredProps = properties.filter((p: any) =>
+    String(p.title || p.street || '').toLowerCase().includes(linkSearch.toLowerCase())
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.detailHeader, { borderBottomColor: colors.border }]}>
+      <View style={[styles.detailHeader, { borderBottomColor: colors.border, paddingTop: Platform.OS === 'ios' ? 8 : 16 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.detailTitleSm, { color: colors.textPrimary, flex: 1 }]}>Голосовая заметка</Text>
       </View>
 
-      <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
-        {!showResult ? (
-          <>
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <Text style={[styles.recordTime, { color: colors.textPrimary }]}>{formatTimer(seconds)}</Text>
-              <Text style={[styles.recordHint, { color: colors.textSecondary, textAlign: 'center' }]}>
-                {modelLoading
-                  ? 'Загрузка модели…'
-                  : isRecording
-                    ? 'Говорите. Нажмите ещё раз чтобы остановить'
-                    : modelReady
-                      ? 'Модель готова. Нажмите микрофон'
-                      : 'Нажмите микрофон — загрузится офлайн-модель Vosk'}
-              </Text>
-              {getVoskError() ? (
-                <Text style={{ color: colors.error, fontSize: 12, marginTop: 6, textAlign: 'center' }}>
-                  {getVoskError()}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingTop: insets.top + 12, paddingBottom: 50 + insets.bottom }} keyboardShouldPersistTaps="handled">
+          {!showResult ? (
+            <>
+              <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 8 }}>
+                <Text style={[styles.recordTime, { color: colors.textPrimary }]}>{formatTimer(seconds)}</Text>
+                <Text style={[styles.recordHint, { color: colors.textSecondary, textAlign: 'center', marginTop: 8 }]}>
+                  {modelLoading ? 'Загрузка модели…' : isRecording ? 'Говорите… Нажмите ещё раз чтобы остановить' : 'Нажмите микрофон и диктуйте свободно'}
                 </Text>
-              ) : null}
-            </View>
+                {getVoskError() ? <Text style={{ color: colors.error, fontSize: 12, marginTop: 6 }}>{getVoskError()}</Text> : null}
+              </View>
 
-            <TouchableOpacity
-              style={[
-                styles.bigMicBtn,
-                {
-                  backgroundColor: isRecording ? colors.error : colors.accent,
-                  alignSelf: 'center',
-                  marginBottom: 20,
-                  opacity: modelLoading ? 0.6 : 1,
-                },
-              ]}
-              onPress={toggleRecording}
-              disabled={modelLoading}
-            >
-              {modelLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Ionicons name={isRecording ? 'stop' : 'mic'} size={48} color="white" />
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.bigMicBtn, { backgroundColor: isRecording ? colors.error : colors.accent, alignSelf: 'center', marginVertical: 16 }]}
+                onPress={toggleRecording}
+                disabled={modelLoading}
+              >
+                <Ionicons name={isRecording ? 'stop' : 'mic'} size={36} color="white" />
+              </TouchableOpacity>
 
-            <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 8 }]}>
-              Распознанный текст (можно править)
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.surfaceMuted,
-                  color: colors.textPrimary,
-                  borderColor: colors.border,
-                  minHeight: 110,
-                  marginBottom: 16,
-                },
-              ]}
-              value={transcribedText}
-              onChangeText={setTranscribedText}
-              placeholder="Текст появится здесь после речи или введите вручную"
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              textAlignVertical="top"
-            />
+              <TextInput
+                style={[styles.input, styles.inputMultiline, { backgroundColor: colors.surfaceMuted, color: colors.textPrimary, borderColor: colors.border, minHeight: 120, marginTop: 12 }]}
+                value={transcribedText}
+                onChangeText={setTranscribedText}
+                placeholder="Текст появится здесь. Можно править вручную…"
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                textAlignVertical="top"
+              />
 
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.accent,
-                borderRadius: 12,
-                paddingVertical: 14,
-                alignItems: 'center',
-              }}
-              onPress={runParse}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Создать карточку</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View style={{ alignItems: 'center' }}>
-            <Ionicons name="checkmark-circle" size={64} color={colors.success} style={{ marginBottom: 16 }} />
-            <Text style={[styles.modalTitle, { color: colors.textPrimary, marginBottom: 8 }]}>
-              {parsedEntity.type === 'client' ? 'Клиент' : 'Объект'}
-            </Text>
-            <View style={[styles.infoCard, { backgroundColor: colors.card, width: '100%', marginBottom: 20 }]}>
-              {parsedEntity.type === 'client' ? (
-                <>
-                  <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
-                    {parsedEntity.data.name}
+              {/* Link buttons */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { flex: 1, backgroundColor: linkedClient ? colors.accent : colors.surfaceMuted }]}
+                  onPress={() => { setLinkSearch(''); setLinkModal('client'); }}
+                >
+                  <Text style={{ color: linkedClient ? 'white' : colors.textPrimary, fontSize: 13, textAlign: 'center' }} numberOfLines={1}>
+                    {linkedClient ? linkedClient.name : 'К клиенту'}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { flex: 1, backgroundColor: linkedProp ? colors.accent : colors.surfaceMuted }]}
+                  onPress={() => { setLinkSearch(''); setLinkModal('property'); }}
+                >
+                  <Text style={{ color: linkedProp ? 'white' : colors.textPrimary, fontSize: 13, textAlign: 'center' }} numberOfLines={1}>
+                    {linkedProp ? (linkedProp.title || linkedProp.street) : 'К объекту'}
+                  </Text>
+                </TouchableOpacity>
+                {(linkedClient || linkedProp) && (
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: colors.errorSoft, paddingHorizontal: 12 }]}
+                    onPress={() => { setLinkedClientId(null); setLinkedPropertyId(null); }}
+                  >
+                    <Ionicons name="close" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { flex: 1, backgroundColor: colors.accent }]}
+                  onPress={saveAsNote}
+                >
+                  <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>Создать заметку</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { flex: 1, backgroundColor: colors.surfaceMuted }]}
+                  onPress={tryParseCard}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: '600', textAlign: 'center' }}>Как карточку</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 12 }}>
+                Заметка сохраняется как есть. Можно привязать к клиенту или объекту.
+              </Text>
+            </>
+          ) : (
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 12 }]}>
+                {parsedEntity?.type === 'client' ? 'Новый клиент' : 'Новый объект'}
+              </Text>
+              {parsedEntity?.type === 'client' ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600' }}>{parsedEntity.data.name}</Text>
                   <Text style={{ color: colors.textSecondary }}>📞 {parsedEntity.data.phone || '—'}</Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    💰 До {formatPrice(parsedEntity.data.budgetMax)}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>📍 {parsedEntity.data.district}</Text>
-                </>
+                  <Text style={{ color: colors.textSecondary }}>💰 {formatPrice(parsedEntity.data.budgetMax)}</Text>
+                </View>
               ) : (
-                <>
-                  <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600', marginBottom: 8 }}>
-                    {parsedEntity.data.title}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    🏠 {parsedEntity.data.rooms}
-                    {parsedEntity.data.areaTotal ? `, ${parsedEntity.data.areaTotal} м²` : ''}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>💰 {formatPrice(parsedEntity.data.price)}</Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    {parsedEntity.data.street || parsedEntity.data.district}
-                  </Text>
-                </>
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '600' }}>{parsedEntity?.data?.title}</Text>
+                  <Text style={{ color: colors.textSecondary }}>💰 {formatPrice(parsedEntity?.data?.price)}</Text>
+                  <Text style={{ color: colors.textSecondary }}>{parsedEntity?.data?.street || parsedEntity?.data?.district}</Text>
+                </View>
               )}
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                <TouchableOpacity style={[styles.modalBtn, { flex: 1, backgroundColor: colors.surfaceMuted }]} onPress={() => setShowResult(false)}>
+                  <Text style={{ color: colors.textPrimary, textAlign: 'center' }}>Назад</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, { flex: 1, backgroundColor: colors.accent }]} onPress={handleSaveEntity}>
+                  <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>Сохранить карточку</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { flex: 1, backgroundColor: colors.surfaceMuted }]}
-                onPress={() => setShowResult(false)}
-              >
-                <Text style={{ color: colors.textPrimary }}>Изменить</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { flex: 1, backgroundColor: colors.success }]}
-                onPress={handleSaveEntity}
-              >
-                <Text style={{ color: 'white', fontWeight: '600' }}>Создать</Text>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Link picker modal */}
+      <Modal visible={!!linkModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '70%', paddingBottom: 50 + insets.bottom }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}>
+                {linkModal === 'client' ? 'Привязать к клиенту' : 'Привязать к объекту'}
+              </Text>
+              <TouchableOpacity onPress={() => setLinkModal(null)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
+            <TextInput
+              style={[styles.input, { margin: 12, backgroundColor: colors.surfaceMuted, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Поиск…"
+              placeholderTextColor={colors.textTertiary}
+              value={linkSearch}
+              onChangeText={setLinkSearch}
+            />
+            <FlatList
+              data={linkModal === 'client' ? filteredClients : filteredProps}
+              keyExtractor={(item: any) => item.id}
+              renderItem={({ item }: any) => (
+                <TouchableOpacity
+                  style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.separator }}
+                  onPress={() => {
+                    if (linkModal === 'client') {
+                      setLinkedClientId(item.id);
+                      setLinkedPropertyId(null);
+                    } else {
+                      setLinkedPropertyId(item.id);
+                      setLinkedClientId(null);
+                    }
+                    setLinkModal(null);
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: '500' }}>
+                    {linkModal === 'client' ? item.name : (item.title || item.street || 'Объект')}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                    {linkModal === 'client' ? item.phone : formatPrice(item.price)}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={{ color: colors.textSecondary, textAlign: 'center', padding: 20 }}>Ничего не найдено</Text>}
+            />
           </View>
-        )}
-      </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

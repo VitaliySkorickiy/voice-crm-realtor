@@ -17,6 +17,7 @@ import PropertyDetailScreen from './screens/PropertyDetailScreen';
 import VoiceRecordScreen from './screens/VoiceRecordScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import LicenseGate from './components/LicenseGate';
+import Onboarding, { isOnboardingDone } from './components/Onboarding';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -76,6 +77,15 @@ function MainTabs() {
 
 function AppContent() {
   const { isDark, colors } = useTheme();
+  const [showOnboarding, setShowOnboarding] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    isOnboardingDone().then((done) => setShowOnboarding(!done));
+  }, []);
+
+  if (showOnboarding === null) return null;
+  if (showOnboarding) return <Onboarding onDone={() => setShowOnboarding(false)} />;
+
   const navTheme = isDark
     ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background, card: colors.card, text: colors.textPrimary, border: colors.border, primary: colors.accent } }
     : { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.background, card: colors.card, text: colors.textPrimary, border: colors.border, primary: colors.accent } };

@@ -4,6 +4,7 @@ import {
   TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
   Switch, Alert, Linking
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -19,6 +20,7 @@ import { styles } from '../styles';
 
 export default function SettingsScreen() {
   const { isDark, toggleTheme, colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { clients, properties, tasks, replaceAll } = useStore();
   const [lic, setLic] = useState<LicenseStatus | null>(null);
   const [keyInput, setKeyInput] = useState('');
@@ -31,10 +33,10 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.screenHeader, { marginTop: 30 }]}>
+      <View style={[styles.screenHeader, { marginTop: 40 }]}>
         <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Настройки</Text>
       </View>
-      <ScrollView style={[styles.scroll, { paddingTop: 30, paddingBottom: 40 }]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 50 + insets.bottom }}>
         <View style={[styles.infoCard, { backgroundColor: colors.card, marginBottom: 16 }]}>
           <View style={styles.settingRow}>
             <Ionicons name="key-outline" size={24} color={colors.accent} />

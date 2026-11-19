@@ -4,6 +4,7 @@ import {
   TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
   Switch, Alert, Linking
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -15,6 +16,7 @@ import { styles } from '../styles';
 
 export default function DashboardScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { tasks, updateTask, deleteTask, addTask, clients } = useStore();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
@@ -125,29 +127,33 @@ export default function DashboardScreen({ navigation }: any) {
       }
 
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('alarms', {
-          name: 'Будильники и напоминания',
-          importance: Notifications.AndroidImportance.MAX,
-          sound: 'default',
-          vibrationPattern: [0, 400, 200, 400],
-          enableVibrate: true,
-          bypassDnd: true,
-        });
+        try {
+          await Notifications.setNotificationChannelAsync('alarms', {
+            name: 'Будильники и напоминания',
+            importance: Notifications.AndroidImportance.MAX,
+            sound: 'default',
+            vibrationPattern: [0, 400, 200, 400],
+            enableVibrate: true,
+          });
+        } catch (chErr) {
+          console.log('channel create skipped', chErr);
+        }
       }
 
       const seconds = Math.max(5, Math.floor((reminderDate.getTime() - Date.now()) / 1000));
 
-      // Простой trigger — лучше работает в Expo Go
       await Notifications.scheduleNotificationAsync({
         content: {
           title: '⏰ ' + reminderTask.title,
           body: 'Напоминание о задаче — пора действовать',
           sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
           ...(Platform.OS === 'android' ? { channelId: 'alarms' } : {}),
         },
         trigger: {
+          type: 'timeInterval',
           seconds,
-          channelId: Platform.OS === 'android' ? 'alarms' : undefined,
+          repeats: false,
         } as any,
       });
 
@@ -188,7 +194,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={[styles.scroll, { paddingTop: 30, paddingBottom: 40 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 50 + insets.bottom }} showsVerticalScrollIndicator={false}>
         <View style={[styles.progressCard, { backgroundColor: colors.card }]}>
           <View style={styles.progressHeader}>
             <View style={{ flex: 1 }}>
@@ -253,11 +259,14 @@ export default function DashboardScreen({ navigation }: any) {
                     {task.done && <Ionicons name="checkmark" size={14} color="white" />}
                   </View>
                   <View style={styles.taskIconBox}>
-                    <Ionicons name={task.type === 'call' ? 'call-outline' : task.type === 'showing' ? 'key-outline' : 'document-text-outline'} size={18} color={colors.accent} />
+                    <Ionicons name={task.type === 'note' ? 'mic-outline' : task.type === 'call' ? 'call-outline' : task.type === 'showing' ? 'key-outline' : 'document-text-outline'} size={18} color={colors.accent} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.taskTitle, { color: colors.textPrimary }, task.done && { textDecorationLine: 'line-through', color: colors.textTertiary }]}>{task.title}</Text>
-                    <Text style={[styles.taskTime, { color: colors.textSecondary }]}>{formatTime(task.date)}</Text>
+                    <Text style={[styles.taskTime, { color: colors.textSecondary }]}>
+                      {formatTime(task.date)}
+                      {task.clientName ? ` · ${task.clientName}` : task.propertyTitle ? ` · ${task.propertyTitle}` : ''}
+                    </Text>
                   </View>
                 </TouchableOpacity>
                 {!task.done && (
@@ -341,10 +350,10 @@ export default function DashboardScreen({ navigation }: any) {
                     <DateTimePicker
                       value={reminderDate}
                       mode="date"
-                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
                       minimumDate={new Date()}
                       locale="ru-RU"
-                      onChange={(_, selected) => {
+                      onValueChange={(_, selected) => {
                         if (Platform.OS === 'android') setShowDatePicker(false);
                         if (selected) {
                           const next = new Date(reminderDate);
@@ -377,10 +386,10 @@ export default function DashboardScreen({ navigation }: any) {
                     <DateTimePicker
                       value={reminderDate}
                       mode="time"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      display='spinner'
                       is24Hour
                       locale="ru-RU"
-                      onChange={(_, selected) => {
+                      onValueChange={(_, selected) => {
                         if (Platform.OS === 'android') setShowTimePicker(false);
                         if (selected) {
                           const next = new Date(reminderDate);

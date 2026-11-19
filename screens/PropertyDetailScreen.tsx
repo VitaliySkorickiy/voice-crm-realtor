@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
   TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking
+  Switch, Alert, Linking, Share
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -17,12 +19,32 @@ import { styles } from '../styles';
 
 export default function PropertyDetailScreen({ route, navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { addProperty, updateProperty } = useStore();
   const { property: initialProperty, isNew: isNewParam } = route.params;
   const [isNew, setIsNew] = useState(!!isNewParam);
   const [isEditing, setIsEditing] = useState(!!isNewParam);
   const [form, setForm] = useState({ ...initialProperty, photos: initialProperty.photos || (initialProperty.photo ? [initialProperty.photo] : []) });
   const [saved, setSaved] = useState(false);
+  const DEFAULT_CHECKLIST = [
+    'Показ проведён',
+    'Клиент заинтересован',
+    'Запрошены документы у владельца',
+    'Проверен ЕГРН / право собственности',
+    'Проверены обременения',
+    'Согласована цена / торг',
+    'Подготовлен договор задатка',
+    'Задаток / аванс получен',
+    'Ипотека одобрена (если нужна)',
+    'Назначена дата сделки',
+    'Сделка зарегистрирована',
+  ];
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [checklist, setChecklist] = useState<string[]>(
+    Array.isArray(initialProperty.checklist) && initialProperty.checklist.length
+      ? initialProperty.checklist
+      : DEFAULT_CHECKLIST
+  );
 
   const update = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
   const handleSave = () => {
@@ -83,6 +105,40 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
     const newPhotos = form.photos.filter((_: any, i: number) => i !== index);
     update('photos', newPhotos);
   };
+  const sendClientPresentation = async () => {
+    const lines = [
+      form.title || 'Объект недвижимости',
+      form.rooms || '',
+      form.areaTotal ? form.areaTotal + ' м²' : '',
+      form.price ? formatPrice(form.price) : '',
+      form.district ? 'Район: ' + form.district : '',
+      form.floor ? 'Этаж: ' + form.floor + (form.floorsTotal ? '/' + form.floorsTotal : '') : '',
+      form.note || '',
+      '',
+      'Свяжитесь со мной для просмотра и подробностей.',
+    ].filter(Boolean);
+    const message = lines.join('\n');
+    const photo = (form.photos && form.photos[0]) || form.photo || null;
+
+    try {
+      if (photo && await Sharing.isAvailableAsync()) {
+        // Сначала текст
+        await Share.share({ message });
+        // Затем фото отдельным шарингом (надёжнее на Android)
+        await Sharing.shareAsync(photo, {
+          mimeType: 'image/jpeg',
+          dialogTitle: 'Фото объекта',
+        });
+      } else {
+        await Share.share({ message });
+      }
+    } catch (e) {
+      console.log('share error', e);
+      Alert.alert('Ошибка', 'Не удалось отправить презентацию');
+    }
+  };
+
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -97,12 +153,19 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
                 <TouchableOpacity onPress={handleSave} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}><Ionicons name="checkmark-circle" size={22} color={colors.success} /></TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity onPress={() => setIsEditing(true)} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}><Ionicons name="create-outline" size={22} color={colors.accent} /></TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity onPress={sendClientPresentation} style={[styles.iconBtnSm, { backgroundColor: colors.accent }]}>
+                  <Ionicons name="send-outline" size={18} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsEditing(true)} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}>
+                  <Ionicons name="create-outline" size={22} color={colors.accent} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
 
-        <ScrollView style={[styles.scroll, { paddingTop: 30, paddingBottom: 40 }]} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 50 + insets.bottom }} showsVerticalScrollIndicator={false}>
           <View style={styles.galleryContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
               {(form.photos || []).map((photo: string, idx: number) => (
@@ -152,6 +215,47 @@ export default function PropertyDetailScreen({ route, navigation }: any) {
               {form.readyToDeal && <View style={[styles.badge, { backgroundColor: colors.successSoft }]}><Text style={[styles.badgeText, { color: colors.success }]}>Готов к сделке</Text></View>}
             </View>
           )}
+
+          
+          {!isEditing && (
+            <TouchableOpacity
+              style={{ marginHorizontal: 16, marginTop: 12, marginBottom: 8, backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+              onPress={sendClientPresentation}
+            >
+              <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Отправить презентацию клиенту</Text>
+            </TouchableOpacity>
+          )}
+          <View style={[styles.infoCard, { backgroundColor: colors.card, marginHorizontal: 16, marginTop: 12 }]}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              onPress={() => setChecklistOpen(!checklistOpen)}
+            >
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Чек-лист сделки</Text>
+              <Ionicons name={checklistOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            {checklistOpen && checklist.map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: idx < checklist.length - 1 ? 1 : 0, borderBottomColor: colors.separator }}
+                onPress={() => {
+                  const next = [...checklist];
+                  next[idx] = next[idx].startsWith('✓ ') ? next[idx].slice(2) : '✓ ' + next[idx];
+                  setChecklist(next);
+                  update('checklist', next);
+                }}
+              >
+                <Ionicons
+                  name={item.startsWith('✓ ') ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color={item.startsWith('✓ ') ? colors.success : colors.textTertiary}
+                />
+                <Text style={{ marginLeft: 12, flex: 1, color: colors.textPrimary, fontSize: 15, textDecorationLine: item.startsWith('✓ ') ? 'line-through' : 'none' }}>
+                  {item.replace('✓ ', '')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Сделка</Text>

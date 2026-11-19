@@ -1,31 +1,39 @@
-export function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+export function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-export function formatPrice(price: number) {
-  if (!price && price !== 0) return '—';
-  return price.toLocaleString('ru-RU') + ' ₽';
+export function formatPrice(n: number | undefined | null): string {
+  if (!n && n !== 0) return '—';
+  return new Intl.NumberFormat('ru-RU').format(n) + ' ₽';
 }
 
-export function formatPriceShort(price: number) {
-  if (!price && price !== 0) return '—';
-  if (price >= 1000000) return (price / 1000000).toFixed(1).replace('.', ',') + ' млн ₽';
-  return Math.round(price / 1000) + ' тыс ₽';
+export function formatPriceShort(n: number | undefined | null): string {
+  if (!n) return '—';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' млн';
+  if (n >= 1_000) return Math.round(n / 1_000) + ' тыс';
+  return String(n);
 }
 
-export function formatTime(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+export function formatTime(date: Date | string | number): string {
+  const d = new Date(date);
+  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function isSameDay(iso: string, date: Date) {
-  const d = new Date(iso);
-  return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth() && d.getDate() === date.getDate();
+export function isSameDay(a: Date | string | number, b: Date | string | number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
 }
 
-export function maskPhone(text: string) {
-  const digits = text.replace(/\D/g, '').slice(0, 11);
-  if (!digits) return '';
+/** Маска телефона: всегда начинается с +7, только цифры */
+export function maskPhone(text: string): string {
+  let digits = text.replace(/\D/g, '');
+  // если начали с 8 — заменяем на 7
+  if (digits.startsWith('8')) digits = '7' + digits.slice(1);
+  // если не начинается с 7 — добавляем 7
+  if (digits && !digits.startsWith('7')) digits = '7' + digits;
+  digits = digits.slice(0, 11);
+  if (!digits) return '+7';
   let result = '+7';
   if (digits.length > 1) result += ' (' + digits.slice(1, 4);
   if (digits.length >= 5) result += ') ' + digits.slice(4, 7);
@@ -36,4 +44,17 @@ export function maskPhone(text: string) {
 
 export function getDigitsOnly(phone: string): string {
   return phone.replace(/\D/g, '');
+}
+
+/** Только цифры (целые числа) */
+export function digitsOnly(text: string, maxLen = 12): string {
+  return text.replace(/\D/g, '').slice(0, maxLen);
+}
+
+/** Цифры + одна точка/запятая (для площадей, высоты и т.п.) */
+export function decimalOnly(text: string, maxLen = 8): string {
+  let cleaned = text.replace(/[^\d.,]/g, '').replace(',', '.');
+  const parts = cleaned.split('.');
+  if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+  return cleaned.slice(0, maxLen);
 }

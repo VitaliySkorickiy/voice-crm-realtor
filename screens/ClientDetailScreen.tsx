@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView, ScrollView,
   TextInput, FlatList, Image, KeyboardAvoidingView, Platform, Modal, Pressable,
-  Switch, Alert, Linking
+  Switch, Alert, Linking, Share
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -16,6 +17,7 @@ import { styles } from '../styles';
 
 export default function ClientDetailScreen({ route, navigation }: any) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { addClient, updateClient, properties } = useStore();
   const { client: initialClient, isNew: isNewParam } = route.params;
   const [isNew, setIsNew] = useState(!!isNewParam);
@@ -40,6 +42,24 @@ export default function ClientDetailScreen({ route, navigation }: any) {
 
   const shownProps = Array.isArray(form.shownProperties) ? form.shownProperties : [];
   const matches = matchProperties(form, properties);
+  const shareClient = async () => {
+    const lines = [
+      form.name || 'Клиент',
+      form.phone ? 'Тел: ' + form.phone : '',
+      form.propertyType || '',
+      form.rooms || '',
+      form.budgetMax ? 'Бюджет до ' + formatPrice(form.budgetMax) : '',
+      form.district ? 'Район: ' + form.district : '',
+      form.note || '',
+    ].filter(Boolean);
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch (e) {
+      Alert.alert('Ошибка', 'Не удалось поделиться');
+    }
+  };
+
+
   const filteredPropsForPicker = properties.filter((p: any) => {
     const q = (propSearch || '').toLowerCase();
     return String(p.title || '').toLowerCase().includes(q) ||
@@ -72,12 +92,19 @@ export default function ClientDetailScreen({ route, navigation }: any) {
                 <TouchableOpacity onPress={handleSave} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}><Ionicons name="checkmark-circle" size={22} color={colors.success} /></TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity onPress={() => setIsEditing(true)} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}><Ionicons name="create-outline" size={22} color={colors.accent} /></TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity onPress={shareClient} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}>
+                  <Ionicons name="share-outline" size={20} color={colors.accent} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsEditing(true)} style={[styles.iconBtnSm, { backgroundColor: colors.accentSoft }]}>
+                  <Ionicons name="create-outline" size={22} color={colors.accent} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
 
-        <ScrollView style={[styles.scroll, { paddingTop: 30, paddingBottom: 40 }]} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 50 + insets.bottom }} showsVerticalScrollIndicator={false}>
           {!isEditing && form.phone && (
             <TouchableOpacity style={[styles.contactActionBtn, { backgroundColor: colors.success }]} onPress={() => makeCall(form.phone)}>
               <Ionicons name="call" size={20} color="white" />

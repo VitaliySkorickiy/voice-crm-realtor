@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useTheme } from '../lib/theme';
-import { maskPhone, getDigitsOnly } from '../lib/utils';
+import { maskPhone, digitsOnly, decimalOnly } from '../lib/utils';
 import { styles } from '../styles';
 
 export function FormField({ label, children, counter, required }: any) {
@@ -19,19 +19,41 @@ export function FormField({ label, children, counter, required }: any) {
 
 export function FormInput({ value, onChangeText, placeholder, multiline, maxLength, keyboardType, mask }: any) {
   const { colors } = useTheme();
-  const handleChange = (text: string) => mask === 'phone' ? onChangeText(maskPhone(text)) : onChangeText(text);
+
+  const handleChange = (text: string) => {
+    if (mask === 'phone') {
+      onChangeText(maskPhone(text));
+    } else if (mask === 'digits') {
+      onChangeText(digitsOnly(text, maxLength || 12));
+    } else if (mask === 'decimal') {
+      onChangeText(decimalOnly(text, maxLength || 8));
+    } else {
+      onChangeText(text);
+    }
+  };
+
   return (
     <TextInput
       style={[styles.input, multiline && styles.inputMultiline, { backgroundColor: colors.surfaceMuted, color: colors.textPrimary, borderColor: colors.border }]}
-      value={value} onChangeText={handleChange} placeholder={placeholder} placeholderTextColor={colors.textTertiary}
-      multiline={multiline} maxLength={maxLength} keyboardType={keyboardType} textAlignVertical={multiline ? 'top' : 'center'}
+      value={value}
+      onChangeText={handleChange}
+      placeholder={placeholder}
+      placeholderTextColor={colors.textTertiary}
+      multiline={multiline}
+      maxLength={maxLength}
+      keyboardType={keyboardType}
+      textAlignVertical={multiline ? 'top' : 'center'}
     />
   );
 }
 
 export function ReadOnlyField({ value }: { value: string }) {
   const { colors } = useTheme();
-  return <View style={[styles.readOnlyField, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}><Text style={[styles.readOnlyText, { color: colors.textPrimary }]}>{value || '—'}</Text></View>;
+  return (
+    <View style={[styles.readOnlyField, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
+      <Text style={[styles.readOnlyText, { color: colors.textPrimary }]}>{value || '—'}</Text>
+    </View>
+  );
 }
 
 export function ChipSelector({ options, value, onChange }: any) {
@@ -39,7 +61,11 @@ export function ChipSelector({ options, value, onChange }: any) {
   return (
     <View style={styles.chipsRow}>
       {options.map((opt: string) => (
-        <TouchableOpacity key={opt} style={[styles.chip, value === opt ? { backgroundColor: colors.accent, borderColor: colors.accent } : { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]} onPress={() => onChange(opt)}>
+        <TouchableOpacity
+          key={opt}
+          style={[styles.chip, value === opt ? { backgroundColor: colors.accent, borderColor: colors.accent } : { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}
+          onPress={() => onChange(opt)}
+        >
           <Text style={[styles.chipText, value === opt ? { color: 'white' } : { color: colors.textPrimary }]}>{opt}</Text>
         </TouchableOpacity>
       ))}
@@ -50,24 +76,11 @@ export function ChipSelector({ options, value, onChange }: any) {
 export function ToggleButton({ label, value, onPress }: any) {
   const { colors } = useTheme();
   return (
-    <TouchableOpacity style={[styles.toggleBtn, value ? { backgroundColor: colors.accentSoft, borderColor: colors.accent } : { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]} onPress={onPress}>
-      <Text style={[styles.toggleText, value ? { color: colors.accent } : { color: colors.textPrimary }]}>{label}</Text>
+    <TouchableOpacity
+      style={[styles.toggleBtn, { backgroundColor: value ? colors.accent : colors.surfaceMuted, borderColor: value ? colors.accent : colors.border }]}
+      onPress={onPress}
+    >
+      <Text style={{ color: value ? 'white' : colors.textPrimary }}>{label}</Text>
     </TouchableOpacity>
   );
 }
-
-export async function makeCall(phone: string) {
-  const digits = getDigitsOnly(phone);
-  if (!digits) {
-    Alert.alert('Ошибка', 'Номер телефона не указан');
-    return;
-  }
-  const url = `tel:${digits}`;
-  const supported = await Linking.canOpenURL(url);
-  if (supported) {
-    Linking.openURL(url);
-  } else {
-    Alert.alert('Ошибка', 'Звонки не поддерживаются на этом устройстве');
-  }
-}
-
