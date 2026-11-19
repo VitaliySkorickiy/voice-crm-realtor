@@ -2,26 +2,52 @@
  * Офлайн-распознавание речи через Vosk.
  * Модель должна лежать в assets/vosk-model-small-ru-0.22.
  * Работает только в development/production build, не в Expo Go.
+ *
+ * react-native-vosk v2+ экспортирует именованные функции (loadModel/start/…),
+ * а не класс с default export — поэтому нельзя делать `new Vosk()`.
  */
 import { Platform } from 'react-native';
+import type { EmitterSubscription } from 'react-native';
 
 const VOSK_MODEL_NAME = 'vosk-model-small-ru-0.22';
 
-let voskInstance: any = null;
+type VoskApi = typeof import('react-native-vosk');
+
+let voskApi: VoskApi | null = null;
 let loaded = false;
 let loadError: string | null = null;
+let subscriptions: EmitterSubscription[] = [];
 
-async function getVosk() {
-  if (voskInstance) return voskInstance;
+async function getVosk(): Promise<VoskApi> {
+  if (voskApi) return voskApi;
   try {
     // dynamic import so Expo Go doesn't crash on missing native module
     const mod = await import('react-native-vosk');
-    voskInstance = new mod.default();
-    return voskInstance;
+    // v2 API: named exports only (no default class). Fallback if a bundler
+    // still wraps them under default.
+    const api = (mod as VoskApi).loadModel
+      ? (mod as VoskApi)
+      : ((mod as { default?: VoskApi }).default as VoskApi | undefined);
+    if (!api?.loadModel || !api?.start) {
+      throw new Error(
+        'react-native-vosk: ожидаются именованные экспорты loadModel/start (не класс)'
+      );
+    }
+    voskApi = api;
+    return voskApi;
   } catch (e: any) {
     loadError = e?.message || 'react-native-vosk не найден (нужен dev build)';
     throw new Error(loadError || 'react-native-vosk не найден');
   }
+}
+
+function clearSubscriptions() {
+  for (const sub of subscriptions) {
+    try {
+      sub.remove();
+    } catch {}
+  }
+  subscriptions = [];
 }
 
 export async function ensureModelLoaded(): Promise<void> {
@@ -64,44 +90,66 @@ export async function startListening(
   const vosk = await getVosk();
   await ensureModelLoaded();
 
-  // clear previous listeners if any
-  try { vosk.removeAllListeners?.(); } catch {}
+  clearSubscriptions();
 
-  vosk.onPartialResult((res: any) => {
-    const text = typeof res === 'string' ? res : (res?.partial || res?.text || '');
-    if (text) onPartial(String(text));
-  });
-  vosk.onResult((res: any) => {
-    const text = typeof res === 'string' ? res : (res?.text || '');
-    if (text) onFinal(String(text));
-  });
-  vosk.onFinalResult((res: any) => {
-    const text = typeof res === 'string' ? res : (res?.text || '');
-    if (text) onFinal(String(text));
-  });
-  vosk.onError((err: any) => {
-    const message = typeof err === 'string' ? err : (err?.message || String(err) || 'Ошибка распознавания');
-    loadError = message;
-    console.log('Vosk error', err);
-    onError?.(message);
-  });
+  const asText = (res: unknown) => {
+    if (typeof res === 'string') return res;
+    if (res && typeof res === 'object') {
+      const obj = res as { partial?: string; text?: string };
+      return obj.partial || obj.text || '';
+    }
+    return '';
+  };
+
+  subscriptions.push(
+    vosk.onPartialResult((res: any) => {
+      const text = asText(res);
+      if (text) onPartial(String(text));
+    }) as EmitterSubscription
+  );
+  subscriptions.push(
+    vosk.onResult((res: any) => {
+      const text = asText(res);
+      if (text) onFinal(String(text));
+    }) as EmitterSubscription
+  );
+  subscriptions.push(
+    vosk.onFinalResult((res: any) => {
+      const text = asText(res);
+      if (text) onFinal(String(text));
+    }) as EmitterSubscription
+  );
+  subscriptions.push(
+    vosk.onError((err: any) => {
+      const message =
+        typeof err === 'string'
+          ? err
+          : err?.message || String(err) || 'Ошибка распознавания';
+      loadError = message;
+      console.log('Vosk error', err);
+      onError?.(message);
+    }) as EmitterSubscription
+  );
 
   await vosk.start();
 }
 
 export async function stopListening(): Promise<void> {
-  if (!voskInstance) return;
+  if (!voskApi) return;
   try {
-    voskInstance.stop();
+    voskApi.stop();
   } catch (e) {
     console.log('vosk stop', e);
+  } finally {
+    clearSubscriptions();
   }
 }
 
 export async function unloadModel(): Promise<void> {
-  if (!voskInstance) return;
+  if (!voskApi) return;
   try {
-    voskInstance.unload();
+    clearSubscriptions();
+    voskApi.unload();
     loaded = false;
   } catch {}
 }
